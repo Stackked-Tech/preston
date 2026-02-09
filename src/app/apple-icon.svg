@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180" width="180" height="180">
+  <!-- Background -->
+  <rect width="180" height="180" rx="40" fill="#1a1a2e"/>
+  <!-- Hard hat dome -->
+  <path d="M40 95 C40 58 58 35 90 35 C122 35 140 58 140 95 L40 95Z" fill="#D4AF37" stroke="#B8960C" stroke-width="2"/>
+  <!-- Hard hat brim -->
+  <rect x="28" y="90" width="124" height="20" rx="6" fill="#D4AF37" stroke="#B8960C" stroke-width="2"/>
+  <!-- Hat center stripe -->
+  <rect x="82" y="40" width="16" height="52" rx="3" fill="#B8960C" opacity="0.5"/>
+  <!-- Crossed tools below hat -->
+  <!-- Hammer handle -->
+  <line x1="55" y1="122" x2="95" y2="162" stroke="#8B7355" stroke-width="8" stroke-linecap="round"/>
+  <!-- Hammer head -->
+  <rect x="42" y="112" width="22" height="14" rx="2" fill="#78909C" stroke="#546E7A" stroke-width="1.5" transform="rotate(-45 53 119)"/>
+  <!-- Wrench handle -->
+  <line x1="125" y1="122" x2="85" y2="162" stroke="#78909C" stroke-width="8" stroke-linecap="round"/>
+  <!-- Wrench head -->
+  <circle cx="130" cy="118" r="12" fill="none" stroke="#78909C" stroke-width="6"/>
+  <circle cx="130" cy="118" r="5" fill="#1a1a2e"/>
+</svg>
