@@ -3,8 +3,8 @@ import Providers from "@/components/Providers";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "WHB Companies - Project Tracker",
-  description: "Project Portfolio Tracker for WHB Companies",
+  title: "WHB Companies - Command Center",
+  description: "WHB Companies Application Suite",
 };
 
 export default function RootLayout({

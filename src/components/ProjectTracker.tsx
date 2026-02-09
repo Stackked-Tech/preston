@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import Link from "next/link";
 import {
   DndContext,
   closestCenter,
@@ -461,6 +462,14 @@ export default function ProjectTracker() {
         }}
       >
         <div className="flex items-center gap-4">
+          <Link
+            href="/"
+            className="border px-2.5 py-1.5 rounded-md text-xs font-sans transition-all no-underline"
+            style={{ borderColor: "var(--border-color)", color: "var(--gold)" }}
+            title="Back to Dashboard"
+          >
+            ← Home
+          </Link>
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
             className="border px-2.5 py-1.5 rounded-md text-base font-sans transition-all"
@@ -470,7 +479,7 @@ export default function ProjectTracker() {
           </button>
           <div>
             <h1 className="text-[22px] font-light tracking-[3px] uppercase m-0" style={{ color: "var(--gold)" }}>
-              WHB Companies
+              Preston Brain Dump
             </h1>
             <p className="text-[11px] font-sans tracking-[2px] uppercase mt-0.5" style={{ color: "var(--text-muted)" }}>
               Project Portfolio Tracker
