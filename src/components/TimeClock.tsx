@@ -3,19 +3,21 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { useTheme } from "@/lib/theme";
-import { useEmployees, useTimeEntries } from "@/lib/timeClockHooks";
+import { useEmployees, useTimeEntries, useJobs } from "@/lib/timeClockHooks";
 
-type Screen = "input" | "confirm" | "action";
+type Screen = "input" | "confirm" | "select-job" | "action";
 
 export default function TimeClock() {
   const { theme, toggleTheme } = useTheme();
   const { employees, loading: empLoading, findByNumber } = useEmployees();
   const { entries, loading: entLoading, getOpenEntry, clockIn, clockOut, refetch: refetchEntries } = useTimeEntries();
+  const { activeJobs, loading: jobsLoading } = useJobs();
 
   const [screen, setScreen] = useState<Screen>("input");
   const [employeeNumber, setEmployeeNumber] = useState("");
   const [matchedEmployee, setMatchedEmployee] = useState<ReturnType<typeof findByNumber>>(undefined);
   const [openEntry, setOpenEntry] = useState<ReturnType<typeof getOpenEntry>>(undefined);
+  const [selectedJobId, setSelectedJobId] = useState<string | undefined>(undefined);
   const [message, setMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
   const [now, setNow] = useState(new Date());
 
@@ -36,6 +38,7 @@ export default function TimeClock() {
         setEmployeeNumber("");
         setMatchedEmployee(undefined);
         setOpenEntry(undefined);
+        setSelectedJobId(undefined);
         setMessage(null);
       }, 30000);
     }
@@ -79,7 +82,13 @@ export default function TimeClock() {
     if (!matchedEmployee) return;
     const entry = getOpenEntry(matchedEmployee.id);
     setOpenEntry(entry);
-    setScreen("action");
+    // If clocking out (has open entry), go straight to action
+    // If clocking in, go to job selection first
+    if (entry) {
+      setScreen("action");
+    } else {
+      setScreen("select-job");
+    }
     resetInactivityTimer();
   };
 
@@ -87,18 +96,30 @@ export default function TimeClock() {
     setScreen("input");
     setEmployeeNumber("");
     setMatchedEmployee(undefined);
+    setSelectedJobId(undefined);
+  };
+
+  const handleSelectJob = (jobId: string) => {
+    setSelectedJobId(jobId);
+    setScreen("action");
+    resetInactivityTimer();
   };
 
   const handleClockIn = async () => {
     if (!matchedEmployee) return;
     try {
-      await clockIn(matchedEmployee.id);
-      setMessage({ text: `Clocked in! Have a great shift, ${matchedEmployee.first_name}.`, type: "success" });
+      await clockIn(matchedEmployee.id, selectedJobId);
+      const jobName = activeJobs.find((j) => j.id === selectedJobId)?.name;
+      setMessage({
+        text: `Clocked in${jobName ? ` for ${jobName}` : ""}! Have a great shift, ${matchedEmployee.first_name}.`,
+        type: "success",
+      });
       setTimeout(() => {
         setScreen("input");
         setEmployeeNumber("");
         setMatchedEmployee(undefined);
         setOpenEntry(undefined);
+        setSelectedJobId(undefined);
         setMessage(null);
       }, 4000);
     } catch {
@@ -120,6 +141,7 @@ export default function TimeClock() {
         setEmployeeNumber("");
         setMatchedEmployee(undefined);
         setOpenEntry(undefined);
+        setSelectedJobId(undefined);
         setMessage(null);
       }, 4000);
     } catch {
@@ -135,7 +157,7 @@ export default function TimeClock() {
     return `${h}h ${m}m`;
   };
 
-  const loading = empLoading || entLoading;
+  const loading = empLoading || entLoading || jobsLoading;
 
   if (loading) {
     return (
@@ -317,6 +339,58 @@ export default function TimeClock() {
                   Yes
                 </button>
               </div>
+            </div>
+          )}
+
+          {/* SELECT JOB SCREEN */}
+          {screen === "select-job" && matchedEmployee && (
+            <div className="text-center">
+              <p className="text-lg font-sans mb-1" style={{ color: "var(--text-primary)" }}>
+                {matchedEmployee.first_name} {matchedEmployee.last_name}
+              </p>
+              <p className="text-[11px] font-sans uppercase tracking-[2px] mb-6" style={{ color: "var(--text-muted)" }}>
+                Select your job
+              </p>
+
+              <div className="space-y-3">
+                {activeJobs.map((job) => (
+                  <button
+                    key={job.id}
+                    onClick={() => handleSelectJob(job.id)}
+                    className="w-full py-5 rounded-xl text-xl font-sans font-medium transition-all active:scale-95 border-2"
+                    style={{
+                      background: "rgba(212,175,55,0.08)",
+                      borderColor: "var(--border-color)",
+                      color: "var(--text-primary)",
+                    }}
+                  >
+                    {job.name}
+                  </button>
+                ))}
+                {activeJobs.length === 0 && (
+                  <div className="py-6" style={{ color: "var(--text-muted)" }}>
+                    <p className="text-sm font-sans mb-4">No jobs configured.</p>
+                    <button
+                      onClick={() => {
+                        setScreen("action");
+                        resetInactivityTimer();
+                      }}
+                      className="px-6 py-3 rounded-xl text-sm font-sans font-medium transition-all border"
+                      style={{ borderColor: "var(--gold)", color: "var(--gold)" }}
+                    >
+                      Continue without job
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <button
+                onClick={handleConfirmNo}
+                className="mt-6 text-sm font-sans px-6 py-2 rounded-lg border transition-all"
+                style={{ borderColor: "var(--border-light)", color: "var(--text-muted)" }}
+              >
+                Cancel
+              </button>
             </div>
           )}
 

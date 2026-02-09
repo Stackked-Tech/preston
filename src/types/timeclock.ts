@@ -10,9 +10,19 @@ export interface TCEmployee {
 export type TCEmployeeInsert = Omit<TCEmployee, "id" | "created_at">;
 export type TCEmployeeUpdate = Partial<Omit<TCEmployee, "id" | "created_at">>;
 
+export interface TCJob {
+  id: string;
+  name: string;
+  is_active: boolean;
+  created_at: string;
+}
+
+export type TCJobInsert = Omit<TCJob, "id" | "created_at">;
+
 export interface TCTimeEntry {
   id: string;
   employee_id: string;
+  job_id: string | null;
   clock_in: string;
   clock_out: string | null;
   notes: string;
@@ -47,6 +57,7 @@ export interface TCDailyEntry {
   hours: number;
   isOvertime: boolean;
   isStale: boolean;
+  jobName: string | null;
 }
 
 export interface TCWeeklySummary {

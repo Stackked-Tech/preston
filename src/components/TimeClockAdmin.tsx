@@ -8,23 +8,28 @@ import {
   useTimeEntries,
   useTimeClockSettings,
   useTimeClockReports,
+  useJobs,
 } from "@/lib/timeClockHooks";
 import { exportDailyCSV, exportWeeklyCSV, exportMonthlyCSV } from "@/lib/timeClockExport";
 
-type Tab = "employees" | "daily" | "weekly" | "monthly" | "settings";
+type Tab = "employees" | "jobs" | "daily" | "weekly" | "monthly" | "settings";
 
 export default function TimeClockAdmin() {
   const { theme, toggleTheme } = useTheme();
   const { employees, loading: empLoading, addEmployee, toggleActive } = useEmployees();
   const { entries, loading: entLoading, updateEntry, refetch: refetchEntries } = useTimeEntries();
   const { overtime, location, loading: settLoading, updateOvertime, updateLocation } = useTimeClockSettings();
-  const reports = useTimeClockReports(employees, entries, overtime);
+  const { jobs, loading: jobsLoading, addJob, toggleActive: toggleJobActive } = useJobs();
+  const reports = useTimeClockReports(employees, entries, overtime, jobs);
 
   const [activeTab, setActiveTab] = useState<Tab>("employees");
 
   // Employee form
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
+
+  // Job form
+  const [jobName, setJobName] = useState("");
 
   // Daily log
   const [dailyDate, setDailyDate] = useState(() => new Date().toISOString().slice(0, 10));
@@ -48,7 +53,7 @@ export default function TimeClockAdmin() {
   const [editingEntry, setEditingEntry] = useState<string | null>(null);
   const [editClockOut, setEditClockOut] = useState("");
 
-  const loading = empLoading || entLoading || settLoading;
+  const loading = empLoading || entLoading || settLoading || jobsLoading;
 
   const handleAddEmployee = async () => {
     if (!firstName.trim() || !lastName.trim()) return;
@@ -58,6 +63,16 @@ export default function TimeClockAdmin() {
       setLastName("");
     } catch (err) {
       console.error("Failed to add employee:", err);
+    }
+  };
+
+  const handleAddJob = async () => {
+    if (!jobName.trim()) return;
+    try {
+      await addJob(jobName.trim());
+      setJobName("");
+    } catch (err) {
+      console.error("Failed to add job:", err);
     }
   };
 
@@ -165,6 +180,7 @@ export default function TimeClockAdmin() {
       <div className="px-6 pt-4 flex gap-1 border-b" style={{ borderColor: "var(--border-light)" }}>
         {([
           { key: "employees", label: "Employees" },
+          { key: "jobs", label: "Jobs" },
           { key: "daily", label: "Daily Log" },
           { key: "weekly", label: "Weekly" },
           { key: "monthly", label: "Monthly" },
@@ -278,6 +294,91 @@ export default function TimeClockAdmin() {
           </div>
         )}
 
+        {/* ─── JOBS TAB ─── */}
+        {activeTab === "jobs" && (
+          <div className="max-w-4xl">
+            {/* Add form */}
+            <div className="p-4 rounded-lg border mb-6" style={{ background: "var(--card-bg)", borderColor: "var(--border-color)" }}>
+              <h3 className="text-[10px] font-sans uppercase tracking-[2px] mb-3 font-medium" style={{ color: "var(--text-muted)" }}>
+                Add Job
+              </h3>
+              <div className="flex gap-3">
+                <input
+                  type="text"
+                  placeholder="Job Name"
+                  value={jobName}
+                  onChange={(e) => setJobName(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleAddJob()}
+                  className="flex-1 px-3 py-2 border rounded text-sm font-sans outline-none"
+                  style={{ background: "var(--input-bg)", borderColor: "var(--border-light)", color: "var(--text-primary)" }}
+                />
+                <button
+                  onClick={handleAddJob}
+                  disabled={!jobName.trim()}
+                  className="px-5 py-2 text-xs font-sans font-medium rounded border transition-all disabled:opacity-40"
+                  style={{ borderColor: "var(--gold)", background: "rgba(212,175,55,0.15)", color: "var(--gold)" }}
+                >
+                  Add
+                </button>
+              </div>
+            </div>
+
+            {/* Jobs table */}
+            <table className="w-full text-sm font-sans" style={{ borderCollapse: "collapse" }}>
+              <thead>
+                <tr style={{ borderBottom: "1px solid var(--border-color)" }}>
+                  {["Name", "Status", "Actions"].map((h) => (
+                    <th
+                      key={h}
+                      className="text-left text-[10px] uppercase tracking-[1.5px] font-medium py-2 px-3"
+                      style={{ color: "var(--text-muted)" }}
+                    >
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {jobs.map((job) => (
+                  <tr key={job.id} style={{ borderBottom: "1px solid var(--border-light)" }}>
+                    <td className="py-3 px-3" style={{ color: "var(--text-primary)" }}>
+                      {job.name}
+                    </td>
+                    <td className="py-3 px-3">
+                      <span
+                        className="text-[10px] uppercase tracking-[1px] px-2 py-0.5 rounded"
+                        style={{
+                          color: job.is_active ? "#66bb6a" : "#78909c",
+                          background: job.is_active ? "rgba(102,187,106,0.1)" : "rgba(120,144,156,0.1)",
+                          border: `1px solid ${job.is_active ? "rgba(102,187,106,0.2)" : "rgba(120,144,156,0.2)"}`,
+                        }}
+                      >
+                        {job.is_active ? "Active" : "Inactive"}
+                      </span>
+                    </td>
+                    <td className="py-3 px-3">
+                      <button
+                        onClick={() => toggleJobActive(job.id, !job.is_active)}
+                        className="text-[10px] font-sans uppercase tracking-[1px] px-2.5 py-1 rounded border transition-all"
+                        style={{ borderColor: "var(--border-light)", color: "var(--text-muted)" }}
+                      >
+                        {job.is_active ? "Deactivate" : "Activate"}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {jobs.length === 0 && (
+                  <tr>
+                    <td colSpan={3} className="py-8 text-center" style={{ color: "var(--text-muted)" }}>
+                      No jobs added yet.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+
         {/* ─── DAILY LOG TAB ─── */}
         {activeTab === "daily" && (
           <div className="max-w-5xl">
@@ -303,7 +404,7 @@ export default function TimeClockAdmin() {
             <table className="w-full text-sm font-sans" style={{ borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ borderBottom: "1px solid var(--border-color)" }}>
-                  {["Employee", "Clock In", "Clock Out", "Hours", "Status", ""].map((h) => (
+                  {["Employee", "Job", "Clock In", "Clock Out", "Hours", "Status", ""].map((h) => (
                     <th
                       key={h}
                       className="text-left text-[10px] uppercase tracking-[1.5px] font-medium py-2 px-3"
@@ -315,11 +416,14 @@ export default function TimeClockAdmin() {
                 </tr>
               </thead>
               <tbody>
-                {dailyEntries.map(({ employee, entry, hours, isOvertime, isStale }) => (
+                {dailyEntries.map(({ employee, entry, hours, isOvertime, isStale, jobName: entryJobName }) => (
                   <tr key={entry.id} style={{ borderBottom: "1px solid var(--border-light)" }}>
                     <td className="py-3 px-3" style={{ color: "var(--text-primary)" }}>
                       <span className="font-mono text-xs mr-2" style={{ color: "var(--gold)" }}>{employee.employee_number}</span>
                       {employee.first_name} {employee.last_name}
+                    </td>
+                    <td className="py-3 px-3 text-xs" style={{ color: entryJobName ? "var(--text-secondary)" : "var(--text-muted)" }}>
+                      {entryJobName || "-"}
                     </td>
                     <td className="py-3 px-3" style={{ color: "var(--text-secondary)" }}>
                       {new Date(entry.clock_in).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
@@ -365,7 +469,7 @@ export default function TimeClockAdmin() {
                 ))}
                 {dailyEntries.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="py-8 text-center" style={{ color: "var(--text-muted)" }}>
+                    <td colSpan={7} className="py-8 text-center" style={{ color: "var(--text-muted)" }}>
                       No entries for this date.
                     </td>
                   </tr>

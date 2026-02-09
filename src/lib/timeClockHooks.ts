@@ -8,6 +8,7 @@ import type {
   TCTimeEntry,
   TCOvertimeSettings,
   TCLocationSettings,
+  TCJob,
 } from "@/types/timeclock";
 
 // ─── Employees ───────────────────────────────────────────
@@ -91,6 +92,67 @@ export function useEmployees() {
   return { employees, loading, error, refetch: fetchEmployees, addEmployee, toggleActive, findByNumber };
 }
 
+// ─── Jobs ────────────────────────────────────────────────
+
+export function useJobs() {
+  const [jobs, setJobs] = useState<TCJob[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchJobs = useCallback(async () => {
+    if (!isSupabaseConfigured) {
+      setError("Supabase not configured");
+      setLoading(false);
+      return;
+    }
+    try {
+      setLoading(true);
+      const { data, error: err } = await supabase
+        .from("tc_jobs")
+        .select("*")
+        .order("name", { ascending: true });
+      if (err) throw err;
+      setJobs((data || []) as TCJob[]);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to fetch jobs");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchJobs();
+  }, [fetchJobs]);
+
+  const addJob = async (name: string): Promise<TCJob> => {
+    const { data, error } = await supabase
+      .from("tc_jobs")
+      .insert({ name, is_active: true })
+      .select()
+      .single();
+    if (error) throw error;
+    const created = data as TCJob;
+    setJobs((prev) => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
+    return created;
+  };
+
+  const toggleActive = async (id: string, isActive: boolean): Promise<void> => {
+    const { error } = await supabase
+      .from("tc_jobs")
+      .update({ is_active: isActive })
+      .eq("id", id);
+    if (error) throw error;
+    setJobs((prev) =>
+      prev.map((j) => (j.id === id ? { ...j, is_active: isActive } : j))
+    );
+  };
+
+  const activeJobs = jobs.filter((j) => j.is_active);
+
+  return { jobs, activeJobs, loading, error, refetch: fetchJobs, addJob, toggleActive };
+}
+
 // ─── Time Entries ────────────────────────────────────────
 
 export function useTimeEntries() {
@@ -128,10 +190,12 @@ export function useTimeEntries() {
     return entries.find((e) => e.employee_id === employeeId && !e.clock_out);
   };
 
-  const clockIn = async (employeeId: string): Promise<TCTimeEntry> => {
+  const clockIn = async (employeeId: string, jobId?: string): Promise<TCTimeEntry> => {
+    const insert: Record<string, string> = { employee_id: employeeId, clock_in: new Date().toISOString() };
+    if (jobId) insert.job_id = jobId;
     const { data, error } = await supabase
       .from("tc_time_entries")
-      .insert({ employee_id: employeeId, clock_in: new Date().toISOString() })
+      .insert(insert)
       .select()
       .single();
     if (error) throw error;
@@ -219,7 +283,8 @@ export function useTimeClockSettings() {
 export function useTimeClockReports(
   employees: TCEmployee[],
   entries: TCTimeEntry[],
-  overtime: TCOvertimeSettings
+  overtime: TCOvertimeSettings,
+  jobs?: TCJob[]
 ) {
   const getHours = (entry: TCTimeEntry): number => {
     const start = new Date(entry.clock_in).getTime();
@@ -255,12 +320,15 @@ export function useTimeClockReports(
         });
         const totalDayHours = employeeDayEntries.reduce((sum, e) => sum + getHours(e), 0);
 
+        const job = entry.job_id && jobs ? jobs.find((j) => j.id === entry.job_id) : null;
+
         return {
           employee,
           entry,
           hours,
           isOvertime: totalDayHours > overtime.daily_threshold,
           isStale: isStale(entry),
+          jobName: job ? job.name : null,
         };
       })
       .filter(Boolean) as Array<{
@@ -269,6 +337,7 @@ export function useTimeClockReports(
         hours: number;
         isOvertime: boolean;
         isStale: boolean;
+        jobName: string | null;
       }>;
   };
 

@@ -16,14 +16,15 @@ function formatDate(iso: string): string {
 }
 
 export async function exportDailyCSV(
-  dailyEntries: Array<{ employee: TCEmployee; entry: TCTimeEntry; hours: number }>,
+  dailyEntries: Array<{ employee: TCEmployee; entry: TCTimeEntry; hours: number; jobName: string | null }>,
   date: Date
 ) {
   const Papa = (await import("papaparse")).default;
 
-  const rows = dailyEntries.map(({ employee, entry, hours }) => ({
+  const rows = dailyEntries.map(({ employee, entry, hours, jobName }) => ({
     "Employee #": employee.employee_number,
     "Name": `${employee.first_name} ${employee.last_name}`,
+    "Job": jobName || "",
     "Clock In": formatTime(entry.clock_in),
     "Clock Out": formatTime(entry.clock_out),
     "Hours": hours.toFixed(2),
