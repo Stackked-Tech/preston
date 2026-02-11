@@ -18,6 +18,13 @@ const microApps = [
     icon: "🕐",
     color: "#4dd0e1",
   },
+  {
+    name: "Signed to Sealed",
+    description: "Document signature & envelope management",
+    href: "/signed-to-sealed",
+    icon: "✍️",
+    color: "#8b5cf6",
+  },
 ];
 
 export default function Home() {
