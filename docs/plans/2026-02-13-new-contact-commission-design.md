@@ -15,9 +15,9 @@ Next.js API route at `/api/phorest/commissions` proxies requests to the Phorest 
 **Environment variables:**
 ```
 PHOREST_API_URL=https://platform.phorest.com/third-party-api-server
-PHOREST_BUSINESS_ID=1XT7J0bnPPioke7veQvOSg
-PHOREST_USERNAME=global/austin.warren@whb-legacy.com
-PHOREST_PASSWORD=W8lwiHL-
+PHOREST_BUSINESS_ID=your-business-id
+PHOREST_USERNAME=your-username
+PHOREST_PASSWORD=your-password
 ```
 
 ### Data Flow (Appointments-First Approach)

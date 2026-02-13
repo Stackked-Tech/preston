@@ -24,9 +24,9 @@ Append to the existing `.env` file:
 
 ```
 PHOREST_API_URL=https://platform.phorest.com/third-party-api-server
-PHOREST_BUSINESS_ID=1XT7J0bnPPioke7veQvOSg
-PHOREST_USERNAME=global/austin.warren@whb-legacy.com
-PHOREST_PASSWORD=W8lwiHL-
+PHOREST_BUSINESS_ID=your-business-id
+PHOREST_USERNAME=your-username
+PHOREST_PASSWORD=your-password
 ```
 
 **Important:** These are NOT prefixed with `NEXT_PUBLIC_` — they are server-only.

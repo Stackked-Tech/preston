@@ -11,11 +11,21 @@ const BUSINESS_ID = process.env.PHOREST_BUSINESS_ID;
 const USERNAME = process.env.PHOREST_USERNAME;
 const PASSWORD = process.env.PHOREST_PASSWORD;
 
+function assertConfigured(): void {
+  if (!API_URL || !BUSINESS_ID || !USERNAME || !PASSWORD) {
+    throw new Error(
+      "Phorest API credentials not configured. Set PHOREST_API_URL, PHOREST_BUSINESS_ID, PHOREST_USERNAME, and PHOREST_PASSWORD environment variables."
+    );
+  }
+}
+
 function getAuthHeader(): string {
+  assertConfigured();
   return "Basic " + Buffer.from(`${USERNAME}:${PASSWORD}`).toString("base64");
 }
 
 function getBaseUrl(): string {
+  assertConfigured();
   return `${API_URL}/api/business/${BUSINESS_ID}`;
 }
 

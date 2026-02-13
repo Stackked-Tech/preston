@@ -33,10 +33,11 @@ export function calculateCommissions(
   // Filter to first-visit clients within date range
   const firstVisitClientIds = new Set<string>();
   for (const client of clients) {
+    const firstVisitDate = client.firstVisit?.split("T")[0];
     if (
-      client.firstVisit &&
-      client.firstVisit >= startDate &&
-      client.firstVisit <= endDate &&
+      firstVisitDate &&
+      firstVisitDate >= startDate &&
+      firstVisitDate <= endDate &&
       !client.deleted
     ) {
       firstVisitClientIds.add(client.clientId);

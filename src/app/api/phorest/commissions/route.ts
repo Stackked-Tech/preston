@@ -13,7 +13,16 @@ const CACHE_TTL_HOURS = 1;
 
 export async function POST(request: NextRequest) {
   try {
-    const { startDate, endDate, forceRefresh } = await request.json();
+    let body;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json(
+        { error: "Invalid JSON body" },
+        { status: 400 }
+      );
+    }
+    const { startDate, endDate, forceRefresh } = body;
 
     if (!startDate || !endDate) {
       return NextResponse.json(
@@ -88,20 +97,24 @@ export async function POST(request: NextRequest) {
       endDate
     );
 
-    // Cache results in Supabase
+    // Cache results in Supabase (fire-and-forget — don't block results on cache failure)
     if (isSupabaseConfigured) {
-      const expiresAt = new Date();
-      expiresAt.setHours(expiresAt.getHours() + CACHE_TTL_HOURS);
+      try {
+        const expiresAt = new Date();
+        expiresAt.setHours(expiresAt.getHours() + CACHE_TTL_HOURS);
 
-      await supabase.from("phorest_commission_cache").upsert(
-        {
-          date_range_key: dateRangeKey,
-          results,
-          fetched_at: new Date().toISOString(),
-          expires_at: expiresAt.toISOString(),
-        },
-        { onConflict: "date_range_key" }
-      );
+        await supabase.from("phorest_commission_cache").upsert(
+          {
+            date_range_key: dateRangeKey,
+            results,
+            fetched_at: new Date().toISOString(),
+            expires_at: expiresAt.toISOString(),
+          },
+          { onConflict: "date_range_key" }
+        );
+      } catch (cacheError) {
+        console.error("Failed to cache commission results:", cacheError);
+      }
     }
 
     return NextResponse.json(results);
