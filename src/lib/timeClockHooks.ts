@@ -3,13 +3,76 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase, isSupabaseConfigured } from "./supabase";
 import type {
+  TCCompany,
+  TCCompanyInsert,
   TCEmployee,
   TCEmployeeInsert,
   TCTimeEntry,
-  TCOvertimeSettings,
   TCLocationSettings,
   TCJob,
 } from "@/types/timeclock";
+
+// ─── Companies ──────────────────────────────────────────
+
+export function useCompanies() {
+  const [companies, setCompanies] = useState<TCCompany[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchCompanies = useCallback(async () => {
+    if (!isSupabaseConfigured) {
+      setError("Supabase not configured");
+      setLoading(false);
+      return;
+    }
+    try {
+      setLoading(true);
+      const { data, error: err } = await supabase
+        .from("tc_companies")
+        .select("*")
+        .order("name", { ascending: true });
+      if (err) throw err;
+      setCompanies((data || []) as TCCompany[]);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to fetch companies");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchCompanies();
+  }, [fetchCompanies]);
+
+  const addCompany = async (name: string): Promise<TCCompany> => {
+    const insert: TCCompanyInsert = { name, is_active: true };
+    const { data, error } = await supabase
+      .from("tc_companies")
+      .insert(insert)
+      .select()
+      .single();
+    if (error) throw error;
+    const created = data as TCCompany;
+    setCompanies((prev) => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
+    return created;
+  };
+
+  const toggleActive = async (id: string, isActive: boolean): Promise<void> => {
+    const { error } = await supabase
+      .from("tc_companies")
+      .update({ is_active: isActive })
+      .eq("id", id);
+    if (error) throw error;
+    setCompanies((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, is_active: isActive } : c))
+    );
+  };
+
+  const activeCompanies = companies.filter((c) => c.is_active);
+
+  return { companies, activeCompanies, loading, error, refetch: fetchCompanies, addCompany, toggleActive };
+}
 
 // ─── Employees ───────────────────────────────────────────
 
@@ -44,7 +107,12 @@ export function useEmployees() {
     fetchEmployees();
   }, [fetchEmployees]);
 
-  const addEmployee = async (firstName: string, lastName: string): Promise<TCEmployee> => {
+  const addEmployee = async (
+    firstName: string,
+    lastName: string,
+    companyId: string,
+    billableRate: number
+  ): Promise<TCEmployee> => {
     // Auto-generate employee number: MAX + 1, starting at 1001
     const { data: maxRow } = await supabase
       .from("tc_employees")
@@ -60,6 +128,8 @@ export function useEmployees() {
       first_name: firstName,
       last_name: lastName,
       is_active: true,
+      company_id: companyId,
+      billable_rate: billableRate,
     };
 
     const { data, error } = await supabase
@@ -72,6 +142,20 @@ export function useEmployees() {
     const created = data as TCEmployee;
     setEmployees((prev) => [...prev, created]);
     return created;
+  };
+
+  const updateEmployee = async (
+    id: string,
+    updates: { billable_rate?: number; company_id?: string }
+  ): Promise<void> => {
+    const { error } = await supabase
+      .from("tc_employees")
+      .update(updates)
+      .eq("id", id);
+    if (error) throw error;
+    setEmployees((prev) =>
+      prev.map((e) => (e.id === id ? { ...e, ...updates } : e))
+    );
   };
 
   const toggleActive = async (id: string, isActive: boolean): Promise<void> => {
@@ -89,7 +173,7 @@ export function useEmployees() {
     return employees.find((e) => e.employee_number === num && e.is_active);
   };
 
-  return { employees, loading, error, refetch: fetchEmployees, addEmployee, toggleActive, findByNumber };
+  return { employees, loading, error, refetch: fetchEmployees, addEmployee, updateEmployee, toggleActive, findByNumber };
 }
 
 // ─── Jobs ────────────────────────────────────────────────
@@ -125,10 +209,10 @@ export function useJobs() {
     fetchJobs();
   }, [fetchJobs]);
 
-  const addJob = async (name: string): Promise<TCJob> => {
+  const addJob = async (name: string, companyId: string): Promise<TCJob> => {
     const { data, error } = await supabase
       .from("tc_jobs")
-      .insert({ name, is_active: true })
+      .insert({ name, is_active: true, company_id: companyId })
       .select()
       .single();
     if (error) throw error;
@@ -148,9 +232,13 @@ export function useJobs() {
     );
   };
 
+  const getJobsByCompany = (companyId: string): TCJob[] => {
+    return jobs.filter((j) => j.company_id === companyId && j.is_active);
+  };
+
   const activeJobs = jobs.filter((j) => j.is_active);
 
-  return { jobs, activeJobs, loading, error, refetch: fetchJobs, addJob, toggleActive };
+  return { jobs, activeJobs, loading, error, refetch: fetchJobs, addJob, toggleActive, getJobsByCompany };
 }
 
 // ─── Time Entries ────────────────────────────────────────
@@ -227,13 +315,85 @@ export function useTimeEntries() {
     );
   };
 
-  return { entries, loading, error, refetch: fetchEntries, getOpenEntry, clockIn, clockOut, updateEntry };
+  const approveEntry = async (entryId: string, approvedBy: string): Promise<void> => {
+    const now = new Date().toISOString();
+    const updates = { approval_status: "approved" as const, approved_by: approvedBy, approved_at: now };
+    const { error } = await supabase
+      .from("tc_time_entries")
+      .update(updates)
+      .eq("id", entryId);
+    if (error) throw error;
+    setEntries((prev) =>
+      prev.map((e) => (e.id === entryId ? { ...e, ...updates } : e))
+    );
+  };
+
+  const flagEntry = async (entryId: string, flagNote: string): Promise<void> => {
+    const updates = { approval_status: "flagged" as const, flag_note: flagNote };
+    const { error } = await supabase
+      .from("tc_time_entries")
+      .update(updates)
+      .eq("id", entryId);
+    if (error) throw error;
+    setEntries((prev) =>
+      prev.map((e) => (e.id === entryId ? { ...e, ...updates } : e))
+    );
+  };
+
+  const bulkApprove = async (entryIds: string[], approvedBy: string): Promise<void> => {
+    const now = new Date().toISOString();
+    const updates = { approval_status: "approved" as const, approved_by: approvedBy, approved_at: now };
+    const { error } = await supabase
+      .from("tc_time_entries")
+      .update(updates)
+      .in("id", entryIds);
+    if (error) throw error;
+    setEntries((prev) =>
+      prev.map((e) => (entryIds.includes(e.id) ? { ...e, ...updates } : e))
+    );
+  };
+
+  const batchClockIn = async (
+    employeeIds: string[],
+    jobId: string,
+    clockIn: string,
+    clockOut: string
+  ): Promise<void> => {
+    const inserts = employeeIds.map((employeeId) => ({
+      employee_id: employeeId,
+      job_id: jobId,
+      clock_in: clockIn,
+      clock_out: clockOut,
+      approval_status: "pending" as const,
+    }));
+    const { data, error } = await supabase
+      .from("tc_time_entries")
+      .insert(inserts)
+      .select();
+    if (error) throw error;
+    const created = (data || []) as TCTimeEntry[];
+    setEntries((prev) => [...created, ...prev]);
+  };
+
+  return {
+    entries,
+    loading,
+    error,
+    refetch: fetchEntries,
+    getOpenEntry,
+    clockIn,
+    clockOut,
+    updateEntry,
+    approveEntry,
+    flagEntry,
+    bulkApprove,
+    batchClockIn,
+  };
 }
 
 // ─── Settings ────────────────────────────────────────────
 
 export function useTimeClockSettings() {
-  const [overtime, setOvertime] = useState<TCOvertimeSettings>({ daily_threshold: 8, weekly_threshold: 40 });
   const [location, setLocation] = useState<TCLocationSettings>({ name: "R Alexander Barn", lat: null, lng: null, radius_meters: null });
   const [loading, setLoading] = useState(true);
 
@@ -244,7 +404,6 @@ export function useTimeClockSettings() {
       const { data } = await supabase.from("tc_settings").select("*");
       if (data) {
         for (const row of data) {
-          if (row.setting_key === "overtime") setOvertime(row.setting_value as unknown as TCOvertimeSettings);
           if (row.setting_key === "location") setLocation(row.setting_value as unknown as TCLocationSettings);
         }
       }
@@ -257,15 +416,6 @@ export function useTimeClockSettings() {
     fetchSettings();
   }, [fetchSettings]);
 
-  const updateOvertime = async (settings: TCOvertimeSettings): Promise<void> => {
-    const { error } = await supabase
-      .from("tc_settings")
-      .update({ setting_value: settings as unknown as Record<string, unknown>, updated_at: new Date().toISOString() })
-      .eq("setting_key", "overtime");
-    if (error) throw error;
-    setOvertime(settings);
-  };
-
   const updateLocation = async (settings: TCLocationSettings): Promise<void> => {
     const { error } = await supabase
       .from("tc_settings")
@@ -275,7 +425,7 @@ export function useTimeClockSettings() {
     setLocation(settings);
   };
 
-  return { overtime, location, loading, refetch: fetchSettings, updateOvertime, updateLocation };
+  return { location, loading, refetch: fetchSettings, updateLocation };
 }
 
 // ─── Reports ─────────────────────────────────────────────
@@ -283,7 +433,6 @@ export function useTimeClockSettings() {
 export function useTimeClockReports(
   employees: TCEmployee[],
   entries: TCTimeEntry[],
-  overtime: TCOvertimeSettings,
   jobs?: TCJob[]
 ) {
   const getHours = (entry: TCTimeEntry): number => {
@@ -312,21 +461,12 @@ export function useTimeClockReports(
         const employee = employees.find((emp) => emp.id === entry.employee_id);
         if (!employee) return null;
         const hours = getHours(entry);
-
-        // Sum all entries for this employee on this day to check daily overtime
-        const employeeDayEntries = entries.filter((e) => {
-          const ci = new Date(e.clock_in);
-          return e.employee_id === entry.employee_id && ci >= dayStart && ci <= dayEnd;
-        });
-        const totalDayHours = employeeDayEntries.reduce((sum, e) => sum + getHours(e), 0);
-
         const job = entry.job_id && jobs ? jobs.find((j) => j.id === entry.job_id) : null;
 
         return {
           employee,
           entry,
           hours,
-          isOvertime: totalDayHours > overtime.daily_threshold,
           isStale: isStale(entry),
           jobName: job ? job.name : null,
         };
@@ -335,7 +475,6 @@ export function useTimeClockReports(
         employee: TCEmployee;
         entry: TCTimeEntry;
         hours: number;
-        isOvertime: boolean;
         isStale: boolean;
         jobName: string | null;
       }>;
@@ -365,7 +504,6 @@ export function useTimeClockReports(
       });
 
       const dailyHours: number[] = [];
-      const dailyOvertimeFlags: boolean[] = [];
 
       for (let i = 0; i < 7; i++) {
         const dayDate = new Date(start);
@@ -382,7 +520,6 @@ export function useTimeClockReports(
 
         const dayTotal = dayEntries.reduce((sum, e) => sum + getHours(e), 0);
         dailyHours.push(Math.round(dayTotal * 100) / 100);
-        dailyOvertimeFlags.push(dayTotal > overtime.daily_threshold);
       }
 
       const weeklyTotal = dailyHours.reduce((s, h) => s + h, 0);
@@ -391,8 +528,6 @@ export function useTimeClockReports(
         employee,
         dailyHours,
         weeklyTotal: Math.round(weeklyTotal * 100) / 100,
-        isWeeklyOvertime: weeklyTotal > overtime.weekly_threshold,
-        dailyOvertimeFlags,
       };
     });
   };
