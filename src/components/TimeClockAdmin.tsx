@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useTheme } from "@/lib/theme";
 import {
+  useCompanies,
   useEmployees,
   useTimeEntries,
   useTimeClockSettings,
@@ -12,24 +13,31 @@ import {
 } from "@/lib/timeClockHooks";
 import { exportDailyCSV, exportWeeklyCSV, exportMonthlyCSV } from "@/lib/timeClockExport";
 
-type Tab = "employees" | "jobs" | "daily" | "weekly" | "monthly" | "settings";
+type Tab = "companies" | "contractors" | "jobs" | "approval" | "daily" | "weekly" | "monthly" | "crew" | "settings";
 
 export default function TimeClockAdmin() {
   const { theme, toggleTheme } = useTheme();
-  const { employees, loading: empLoading, addEmployee, toggleActive } = useEmployees();
-  const { entries, loading: entLoading, updateEntry, refetch: refetchEntries } = useTimeEntries();
-  const { overtime, location, loading: settLoading, updateOvertime, updateLocation } = useTimeClockSettings();
-  const { jobs, loading: jobsLoading, addJob, toggleActive: toggleJobActive } = useJobs();
-  const reports = useTimeClockReports(employees, entries, overtime, jobs);
+  const { companies, activeCompanies, loading: compLoading, addCompany, toggleActive: toggleCompanyActive } = useCompanies();
+  const { employees, loading: empLoading, addEmployee, toggleActive, updateEmployee } = useEmployees();
+  const { entries, loading: entLoading, updateEntry, refetch: refetchEntries, approveEntry, flagEntry, bulkApprove, batchClockIn } = useTimeEntries();
+  const { location, loading: settLoading, updateLocation } = useTimeClockSettings();
+  const { jobs, loading: jobsLoading, addJob, toggleActive: toggleJobActive, getJobsByCompany } = useJobs();
+  const reports = useTimeClockReports(employees, entries, jobs);
 
-  const [activeTab, setActiveTab] = useState<Tab>("employees");
+  const [activeTab, setActiveTab] = useState<Tab>("approval");
 
-  // Employee form
+  // Company form
+  const [companyName, setCompanyName] = useState("");
+
+  // Contractor form
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
+  const [contractorCompanyId, setContractorCompanyId] = useState("");
+  const [contractorRate, setContractorRate] = useState("");
 
   // Job form
   const [jobName, setJobName] = useState("");
+  const [jobCompanyId, setJobCompanyId] = useState("");
 
   // Daily log
   const [dailyDate, setDailyDate] = useState(() => new Date().toISOString().slice(0, 10));
@@ -41,9 +49,7 @@ export default function TimeClockAdmin() {
   const [monthYear, setMonthYear] = useState(() => new Date().getFullYear());
   const [monthMonth, setMonthMonth] = useState(() => new Date().getMonth());
 
-  // Settings form
-  const [settDailyThreshold, setSettDailyThreshold] = useState(String(overtime.daily_threshold));
-  const [settWeeklyThreshold, setSettWeeklyThreshold] = useState(String(overtime.weekly_threshold));
+  // Settings
   const [settLocationName, setSettLocationName] = useState(location.name);
   const [settLat, setSettLat] = useState(location.lat !== null ? String(location.lat) : "");
   const [settLng, setSettLng] = useState(location.lng !== null ? String(location.lng) : "");
@@ -53,23 +59,37 @@ export default function TimeClockAdmin() {
   const [editingEntry, setEditingEntry] = useState<string | null>(null);
   const [editClockOut, setEditClockOut] = useState("");
 
-  const loading = empLoading || entLoading || settLoading || jobsLoading;
+  // Company filter for reports
+  const [filterCompanyId, setFilterCompanyId] = useState<string | "all">("all");
 
-  const handleAddEmployee = async () => {
-    if (!firstName.trim() || !lastName.trim()) return;
+  const loading = compLoading || empLoading || entLoading || settLoading || jobsLoading;
+
+  const handleAddCompany = async () => {
+    if (!companyName.trim()) return;
     try {
-      await addEmployee(firstName.trim(), lastName.trim());
+      await addCompany(companyName.trim());
+      setCompanyName("");
+    } catch (err) {
+      console.error("Failed to add company:", err);
+    }
+  };
+
+  const handleAddContractor = async () => {
+    if (!firstName.trim() || !lastName.trim() || !contractorCompanyId) return;
+    try {
+      await addEmployee(firstName.trim(), lastName.trim(), contractorCompanyId, parseFloat(contractorRate) || 0);
       setFirstName("");
       setLastName("");
+      setContractorRate("");
     } catch (err) {
-      console.error("Failed to add employee:", err);
+      console.error("Failed to add contractor:", err);
     }
   };
 
   const handleAddJob = async () => {
-    if (!jobName.trim()) return;
+    if (!jobName.trim() || !jobCompanyId) return;
     try {
-      await addJob(jobName.trim());
+      await addJob(jobName.trim(), jobCompanyId);
       setJobName("");
     } catch (err) {
       console.error("Failed to add job:", err);
@@ -78,10 +98,6 @@ export default function TimeClockAdmin() {
 
   const handleSaveSettings = async () => {
     try {
-      await updateOvertime({
-        daily_threshold: parseFloat(settDailyThreshold) || 8,
-        weekly_threshold: parseFloat(settWeeklyThreshold) || 40,
-      });
       await updateLocation({
         name: settLocationName,
         lat: settLat ? parseFloat(settLat) : null,
@@ -137,8 +153,21 @@ export default function TimeClockAdmin() {
   const weeklySummary = reports.getWeeklySummary(weekDate);
   const monthlySummary = reports.getMonthlySummary(monthYear, monthMonth);
 
+  // Filtered report data
+  const filteredDailyEntries = filterCompanyId === "all"
+    ? dailyEntries
+    : dailyEntries.filter(({ employee }) => employee.company_id === filterCompanyId);
+
+  const filteredWeeklySummary = filterCompanyId === "all"
+    ? weeklySummary
+    : weeklySummary.filter(({ employee }) => employee.company_id === filterCompanyId);
+
+  const filteredMonthlySummary = filterCompanyId === "all"
+    ? monthlySummary
+    : monthlySummary.filter(({ employee }) => employee.company_id === filterCompanyId);
+
   // Count weeks for monthly columns
-  const monthWeekCount = monthlySummary.length > 0 ? monthlySummary[0].weeklyHours.length : 0;
+  const monthWeekCount = filteredMonthlySummary.length > 0 ? filteredMonthlySummary[0].weeklyHours.length : 0;
 
   return (
     <div
@@ -177,19 +206,22 @@ export default function TimeClockAdmin() {
       </div>
 
       {/* Tabs */}
-      <div className="px-6 pt-4 flex gap-1 border-b" style={{ borderColor: "var(--border-light)" }}>
+      <div className="px-6 pt-4 flex gap-1 border-b overflow-x-auto" style={{ borderColor: "var(--border-light)" }}>
         {([
-          { key: "employees", label: "Employees" },
+          { key: "approval", label: "Approval Queue" },
+          { key: "companies", label: "Companies" },
+          { key: "contractors", label: "Contractors" },
           { key: "jobs", label: "Jobs" },
           { key: "daily", label: "Daily Log" },
           { key: "weekly", label: "Weekly" },
           { key: "monthly", label: "Monthly" },
+          { key: "crew", label: "Crew Entry" },
           { key: "settings", label: "Settings" },
         ] as const).map((tab) => (
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key)}
-            className="px-4 py-2 text-xs font-sans font-medium transition-all -mb-px"
+            className="px-4 py-2 text-xs font-sans font-medium transition-all -mb-px whitespace-nowrap"
             style={{
               color: activeTab === tab.key ? "var(--gold)" : "var(--text-muted)",
               borderBottom: activeTab === tab.key ? "2px solid var(--gold)" : "2px solid transparent",
@@ -203,21 +235,124 @@ export default function TimeClockAdmin() {
       {/* Content */}
       <div className="flex-1 overflow-auto p-6">
 
-        {/* ─── EMPLOYEES TAB ─── */}
-        {activeTab === "employees" && (
+        {/* ─── APPROVAL QUEUE TAB ─── */}
+        {activeTab === "approval" && (
+          <div className="max-w-5xl py-8 text-center" style={{ color: "var(--text-muted)" }}>
+            Approval Queue coming in next task...
+          </div>
+        )}
+
+        {/* ─── COMPANIES TAB ─── */}
+        {activeTab === "companies" && (
           <div className="max-w-4xl">
             {/* Add form */}
             <div className="p-4 rounded-lg border mb-6" style={{ background: "var(--card-bg)", borderColor: "var(--border-color)" }}>
               <h3 className="text-[10px] font-sans uppercase tracking-[2px] mb-3 font-medium" style={{ color: "var(--text-muted)" }}>
-                Add Employee
+                Add Company
               </h3>
               <div className="flex gap-3">
+                <input
+                  type="text"
+                  placeholder="Company Name"
+                  value={companyName}
+                  onChange={(e) => setCompanyName(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleAddCompany()}
+                  className="flex-1 px-3 py-2 border rounded text-sm font-sans outline-none"
+                  style={{ background: "var(--input-bg)", borderColor: "var(--border-light)", color: "var(--text-primary)" }}
+                />
+                <button
+                  onClick={handleAddCompany}
+                  disabled={!companyName.trim()}
+                  className="px-5 py-2 text-xs font-sans font-medium rounded border transition-all disabled:opacity-40"
+                  style={{ borderColor: "var(--gold)", background: "rgba(212,175,55,0.15)", color: "var(--gold)" }}
+                >
+                  Add
+                </button>
+              </div>
+            </div>
+
+            {/* Company table */}
+            <table className="w-full text-sm font-sans" style={{ borderCollapse: "collapse" }}>
+              <thead>
+                <tr style={{ borderBottom: "1px solid var(--border-color)" }}>
+                  {["Company Name", "Status", "Actions"].map((h) => (
+                    <th
+                      key={h}
+                      className="text-left text-[10px] uppercase tracking-[1.5px] font-medium py-2 px-3"
+                      style={{ color: "var(--text-muted)" }}
+                    >
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {companies.map((company) => (
+                  <tr key={company.id} style={{ borderBottom: "1px solid var(--border-light)" }}>
+                    <td className="py-3 px-3" style={{ color: "var(--text-primary)" }}>
+                      {company.name}
+                    </td>
+                    <td className="py-3 px-3">
+                      <span
+                        className="text-[10px] uppercase tracking-[1px] px-2 py-0.5 rounded"
+                        style={{
+                          color: company.is_active ? "#66bb6a" : "#78909c",
+                          background: company.is_active ? "rgba(102,187,106,0.1)" : "rgba(120,144,156,0.1)",
+                          border: `1px solid ${company.is_active ? "rgba(102,187,106,0.2)" : "rgba(120,144,156,0.2)"}`,
+                        }}
+                      >
+                        {company.is_active ? "Active" : "Inactive"}
+                      </span>
+                    </td>
+                    <td className="py-3 px-3">
+                      <button
+                        onClick={() => toggleCompanyActive(company.id, !company.is_active)}
+                        className="text-[10px] font-sans uppercase tracking-[1px] px-2.5 py-1 rounded border transition-all"
+                        style={{ borderColor: "var(--border-light)", color: "var(--text-muted)" }}
+                      >
+                        {company.is_active ? "Deactivate" : "Activate"}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {companies.length === 0 && (
+                  <tr>
+                    <td colSpan={3} className="py-8 text-center" style={{ color: "var(--text-muted)" }}>
+                      No companies added yet.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* ─── CONTRACTORS TAB ─── */}
+        {activeTab === "contractors" && (
+          <div className="max-w-4xl">
+            {/* Add form */}
+            <div className="p-4 rounded-lg border mb-6" style={{ background: "var(--card-bg)", borderColor: "var(--border-color)" }}>
+              <h3 className="text-[10px] font-sans uppercase tracking-[2px] mb-3 font-medium" style={{ color: "var(--text-muted)" }}>
+                Add Contractor
+              </h3>
+              <div className="flex gap-3 flex-wrap">
+                <select
+                  value={contractorCompanyId}
+                  onChange={(e) => setContractorCompanyId(e.target.value)}
+                  className="px-3 py-2 border rounded text-sm font-sans outline-none"
+                  style={{ background: "var(--input-bg)", borderColor: "var(--border-light)", color: "var(--text-primary)" }}
+                >
+                  <option value="">Select Company</option>
+                  {activeCompanies.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
                 <input
                   type="text"
                   placeholder="First Name"
                   value={firstName}
                   onChange={(e) => setFirstName(e.target.value)}
-                  className="flex-1 px-3 py-2 border rounded text-sm font-sans outline-none"
+                  className="flex-1 px-3 py-2 border rounded text-sm font-sans outline-none min-w-[120px]"
                   style={{ background: "var(--input-bg)", borderColor: "var(--border-light)", color: "var(--text-primary)" }}
                 />
                 <input
@@ -225,12 +360,20 @@ export default function TimeClockAdmin() {
                   placeholder="Last Name"
                   value={lastName}
                   onChange={(e) => setLastName(e.target.value)}
-                  className="flex-1 px-3 py-2 border rounded text-sm font-sans outline-none"
+                  className="flex-1 px-3 py-2 border rounded text-sm font-sans outline-none min-w-[120px]"
+                  style={{ background: "var(--input-bg)", borderColor: "var(--border-light)", color: "var(--text-primary)" }}
+                />
+                <input
+                  type="number"
+                  placeholder="Billable Rate"
+                  value={contractorRate}
+                  onChange={(e) => setContractorRate(e.target.value)}
+                  className="w-[120px] px-3 py-2 border rounded text-sm font-sans outline-none"
                   style={{ background: "var(--input-bg)", borderColor: "var(--border-light)", color: "var(--text-primary)" }}
                 />
                 <button
-                  onClick={handleAddEmployee}
-                  disabled={!firstName.trim() || !lastName.trim()}
+                  onClick={handleAddContractor}
+                  disabled={!firstName.trim() || !lastName.trim() || !contractorCompanyId}
                   className="px-5 py-2 text-xs font-sans font-medium rounded border transition-all disabled:opacity-40"
                   style={{ borderColor: "var(--gold)", background: "rgba(212,175,55,0.15)", color: "var(--gold)" }}
                 >
@@ -238,15 +381,15 @@ export default function TimeClockAdmin() {
                 </button>
               </div>
               <p className="text-[10px] font-sans mt-2" style={{ color: "var(--text-muted)" }}>
-                Employee number will be auto-generated
+                Resource number will be auto-generated
               </p>
             </div>
 
-            {/* Employee table */}
+            {/* Contractor table */}
             <table className="w-full text-sm font-sans" style={{ borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ borderBottom: "1px solid var(--border-color)" }}>
-                  {["#", "Name", "Status", "Actions"].map((h) => (
+                  {["Resource #", "Name", "Company", "Rate", "Status", "Actions"].map((h) => (
                     <th
                       key={h}
                       className="text-left text-[10px] uppercase tracking-[1.5px] font-medium py-2 px-3"
@@ -265,6 +408,12 @@ export default function TimeClockAdmin() {
                     </td>
                     <td className="py-3 px-3" style={{ color: "var(--text-primary)" }}>
                       {emp.first_name} {emp.last_name}
+                    </td>
+                    <td className="py-3 px-3 text-xs" style={{ color: "var(--text-secondary)" }}>
+                      {companies.find((c) => c.id === emp.company_id)?.name || "-"}
+                    </td>
+                    <td className="py-3 px-3 font-mono text-xs" style={{ color: "var(--text-primary)" }}>
+                      ${emp.billable_rate.toFixed(2)}/hr
                     </td>
                     <td className="py-3 px-3">
                       <span
@@ -289,6 +438,13 @@ export default function TimeClockAdmin() {
                     </td>
                   </tr>
                 ))}
+                {employees.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="py-8 text-center" style={{ color: "var(--text-muted)" }}>
+                      No contractors added yet.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -303,6 +459,17 @@ export default function TimeClockAdmin() {
                 Add Job
               </h3>
               <div className="flex gap-3">
+                <select
+                  value={jobCompanyId}
+                  onChange={(e) => setJobCompanyId(e.target.value)}
+                  className="px-3 py-2 border rounded text-sm font-sans outline-none"
+                  style={{ background: "var(--input-bg)", borderColor: "var(--border-light)", color: "var(--text-primary)" }}
+                >
+                  <option value="">Select Company</option>
+                  {activeCompanies.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
                 <input
                   type="text"
                   placeholder="Job Name"
@@ -314,7 +481,7 @@ export default function TimeClockAdmin() {
                 />
                 <button
                   onClick={handleAddJob}
-                  disabled={!jobName.trim()}
+                  disabled={!jobName.trim() || !jobCompanyId}
                   className="px-5 py-2 text-xs font-sans font-medium rounded border transition-all disabled:opacity-40"
                   style={{ borderColor: "var(--gold)", background: "rgba(212,175,55,0.15)", color: "var(--gold)" }}
                 >
@@ -327,7 +494,7 @@ export default function TimeClockAdmin() {
             <table className="w-full text-sm font-sans" style={{ borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ borderBottom: "1px solid var(--border-color)" }}>
-                  {["Name", "Status", "Actions"].map((h) => (
+                  {["Name", "Company", "Status", "Actions"].map((h) => (
                     <th
                       key={h}
                       className="text-left text-[10px] uppercase tracking-[1.5px] font-medium py-2 px-3"
@@ -343,6 +510,9 @@ export default function TimeClockAdmin() {
                   <tr key={job.id} style={{ borderBottom: "1px solid var(--border-light)" }}>
                     <td className="py-3 px-3" style={{ color: "var(--text-primary)" }}>
                       {job.name}
+                    </td>
+                    <td className="py-3 px-3 text-xs" style={{ color: "var(--text-secondary)" }}>
+                      {companies.find((c) => c.id === job.company_id)?.name || "-"}
                     </td>
                     <td className="py-3 px-3">
                       <span
@@ -369,7 +539,7 @@ export default function TimeClockAdmin() {
                 ))}
                 {jobs.length === 0 && (
                   <tr>
-                    <td colSpan={3} className="py-8 text-center" style={{ color: "var(--text-muted)" }}>
+                    <td colSpan={4} className="py-8 text-center" style={{ color: "var(--text-muted)" }}>
                       No jobs added yet.
                     </td>
                   </tr>
@@ -391,9 +561,20 @@ export default function TimeClockAdmin() {
                   className="px-3 py-2 border rounded text-sm font-sans outline-none"
                   style={{ background: "var(--input-bg)", borderColor: "var(--border-light)", color: "var(--text-primary)" }}
                 />
+                <select
+                  value={filterCompanyId}
+                  onChange={(e) => setFilterCompanyId(e.target.value)}
+                  className="px-3 py-2 border rounded text-sm font-sans outline-none"
+                  style={{ background: "var(--input-bg)", borderColor: "var(--border-light)", color: "var(--text-primary)" }}
+                >
+                  <option value="all">All Companies</option>
+                  {activeCompanies.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
               </div>
               <button
-                onClick={() => exportDailyCSV(dailyEntries, new Date(dailyDate))}
+                onClick={() => exportDailyCSV(filteredDailyEntries, new Date(dailyDate))}
                 className="px-4 py-1.5 text-[10px] font-sans font-medium rounded border transition-all uppercase tracking-[1px]"
                 style={{ borderColor: "var(--border-color)", color: "var(--gold)" }}
               >
@@ -404,7 +585,7 @@ export default function TimeClockAdmin() {
             <table className="w-full text-sm font-sans" style={{ borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ borderBottom: "1px solid var(--border-color)" }}>
-                  {["Employee", "Job", "Clock In", "Clock Out", "Hours", "Status", ""].map((h) => (
+                  {["Contractor", "Company", "Job", "Clock In", "Clock Out", "Hours", "Status", "Approval", ""].map((h) => (
                     <th
                       key={h}
                       className="text-left text-[10px] uppercase tracking-[1.5px] font-medium py-2 px-3"
@@ -416,11 +597,14 @@ export default function TimeClockAdmin() {
                 </tr>
               </thead>
               <tbody>
-                {dailyEntries.map(({ employee, entry, hours, isOvertime, isStale, jobName: entryJobName }) => (
+                {filteredDailyEntries.map(({ employee, entry, hours, isStale, jobName: entryJobName }) => (
                   <tr key={entry.id} style={{ borderBottom: "1px solid var(--border-light)" }}>
                     <td className="py-3 px-3" style={{ color: "var(--text-primary)" }}>
                       <span className="font-mono text-xs mr-2" style={{ color: "var(--gold)" }}>{employee.employee_number}</span>
                       {employee.first_name} {employee.last_name}
+                    </td>
+                    <td className="py-3 px-3 text-xs" style={{ color: "var(--text-secondary)" }}>
+                      {companies.find((c) => c.id === employee.company_id)?.name || "-"}
                     </td>
                     <td className="py-3 px-3 text-xs" style={{ color: entryJobName ? "var(--text-secondary)" : "var(--text-muted)" }}>
                       {entryJobName || "-"}
@@ -434,7 +618,7 @@ export default function TimeClockAdmin() {
                         : <span style={{ color: "#66bb6a" }}>Active</span>
                       }
                     </td>
-                    <td className="py-3 px-3 font-mono" style={{ color: isOvertime ? "#ffb74d" : "var(--text-primary)" }}>
+                    <td className="py-3 px-3 font-mono" style={{ color: "var(--text-primary)" }}>
                       {hours.toFixed(2)}h
                     </td>
                     <td className="py-3 px-3">
@@ -444,12 +628,28 @@ export default function TimeClockAdmin() {
                           Stale (&gt;12h)
                         </span>
                       )}
-                      {isOvertime && !isStale && (
-                        <span className="text-[10px] uppercase tracking-[1px] px-2 py-0.5 rounded"
-                          style={{ color: "#ffb74d", background: "rgba(255,183,77,0.1)", border: "1px solid rgba(255,183,77,0.2)" }}>
-                          OT
-                        </span>
-                      )}
+                    </td>
+                    <td className="py-3 px-3">
+                      <span
+                        className="text-[10px] uppercase tracking-[1px] px-2 py-0.5 rounded"
+                        style={{
+                          color: entry.approval_status === "approved" ? "#66bb6a"
+                            : entry.approval_status === "flagged" ? "#ffb74d"
+                            : "#42a5f5",
+                          background: entry.approval_status === "approved" ? "rgba(102,187,106,0.1)"
+                            : entry.approval_status === "flagged" ? "rgba(255,183,77,0.1)"
+                            : "rgba(66,165,245,0.1)",
+                          border: `1px solid ${
+                            entry.approval_status === "approved" ? "rgba(102,187,106,0.2)"
+                              : entry.approval_status === "flagged" ? "rgba(255,183,77,0.2)"
+                              : "rgba(66,165,245,0.2)"
+                          }`,
+                        }}
+                      >
+                        {entry.approval_status === "approved" ? "Approved"
+                          : entry.approval_status === "flagged" ? "Flagged"
+                          : "Pending"}
+                      </span>
                     </td>
                     <td className="py-3 px-3">
                       {(!entry.clock_out || isStale) && (
@@ -467,9 +667,9 @@ export default function TimeClockAdmin() {
                     </td>
                   </tr>
                 ))}
-                {dailyEntries.length === 0 && (
+                {filteredDailyEntries.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="py-8 text-center" style={{ color: "var(--text-muted)" }}>
+                    <td colSpan={9} className="py-8 text-center" style={{ color: "var(--text-muted)" }}>
                       No entries for this date.
                     </td>
                   </tr>
@@ -501,9 +701,20 @@ export default function TimeClockAdmin() {
                 >
                   Next →
                 </button>
+                <select
+                  value={filterCompanyId}
+                  onChange={(e) => setFilterCompanyId(e.target.value)}
+                  className="px-3 py-2 border rounded text-sm font-sans outline-none"
+                  style={{ background: "var(--input-bg)", borderColor: "var(--border-light)", color: "var(--text-primary)" }}
+                >
+                  <option value="all">All Companies</option>
+                  {activeCompanies.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
               </div>
               <button
-                onClick={() => exportWeeklyCSV(weeklySummary, weekRange.start)}
+                onClick={() => exportWeeklyCSV(filteredWeeklySummary, weekRange.start)}
                 className="px-4 py-1.5 text-[10px] font-sans font-medium rounded border transition-all uppercase tracking-[1px]"
                 style={{ borderColor: "var(--border-color)", color: "var(--gold)" }}
               >
@@ -516,7 +727,7 @@ export default function TimeClockAdmin() {
                 <thead>
                   <tr style={{ borderBottom: "1px solid var(--border-color)" }}>
                     <th className="text-left text-[10px] uppercase tracking-[1.5px] font-medium py-2 px-3" style={{ color: "var(--text-muted)" }}>
-                      Employee
+                      Contractor
                     </th>
                     {dayNames.map((d) => (
                       <th key={d} className="text-center text-[10px] uppercase tracking-[1.5px] font-medium py-2 px-2 min-w-[60px]" style={{ color: "var(--text-muted)" }}>
@@ -529,7 +740,7 @@ export default function TimeClockAdmin() {
                   </tr>
                 </thead>
                 <tbody>
-                  {weeklySummary.map(({ employee, dailyHours, weeklyTotal, isWeeklyOvertime, dailyOvertimeFlags }) => (
+                  {filteredWeeklySummary.map(({ employee, dailyHours, weeklyTotal }) => (
                     <tr key={employee.id} style={{ borderBottom: "1px solid var(--border-light)" }}>
                       <td className="py-3 px-3" style={{ color: "var(--text-primary)" }}>
                         {employee.first_name} {employee.last_name}
@@ -539,8 +750,7 @@ export default function TimeClockAdmin() {
                           key={i}
                           className="py-3 px-2 text-center font-mono text-xs"
                           style={{
-                            color: dailyOvertimeFlags[i] ? "#ffb74d" : h > 0 ? "var(--text-primary)" : "var(--text-muted)",
-                            fontWeight: dailyOvertimeFlags[i] ? 600 : 400,
+                            color: h > 0 ? "var(--text-primary)" : "var(--text-muted)",
                           }}
                         >
                           {h > 0 ? h.toFixed(1) : "-"}
@@ -548,17 +758,16 @@ export default function TimeClockAdmin() {
                       ))}
                       <td
                         className="py-3 px-3 text-right font-mono text-xs font-semibold"
-                        style={{ color: isWeeklyOvertime ? "#ef5350" : "var(--gold)" }}
+                        style={{ color: "var(--gold)" }}
                       >
                         {weeklyTotal.toFixed(1)}h
-                        {isWeeklyOvertime && <span className="ml-1 text-[9px]">OT</span>}
                       </td>
                     </tr>
                   ))}
-                  {weeklySummary.length === 0 && (
+                  {filteredWeeklySummary.length === 0 && (
                     <tr>
                       <td colSpan={9} className="py-8 text-center" style={{ color: "var(--text-muted)" }}>
-                        No active employees.
+                        No active contractors.
                       </td>
                     </tr>
                   )}
@@ -590,9 +799,20 @@ export default function TimeClockAdmin() {
                 >
                   Next →
                 </button>
+                <select
+                  value={filterCompanyId}
+                  onChange={(e) => setFilterCompanyId(e.target.value)}
+                  className="px-3 py-2 border rounded text-sm font-sans outline-none"
+                  style={{ background: "var(--input-bg)", borderColor: "var(--border-light)", color: "var(--text-primary)" }}
+                >
+                  <option value="all">All Companies</option>
+                  {activeCompanies.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
               </div>
               <button
-                onClick={() => exportMonthlyCSV(monthlySummary, monthYear, monthMonth)}
+                onClick={() => exportMonthlyCSV(filteredMonthlySummary, monthYear, monthMonth)}
                 className="px-4 py-1.5 text-[10px] font-sans font-medium rounded border transition-all uppercase tracking-[1px]"
                 style={{ borderColor: "var(--border-color)", color: "var(--gold)" }}
               >
@@ -605,7 +825,7 @@ export default function TimeClockAdmin() {
                 <thead>
                   <tr style={{ borderBottom: "1px solid var(--border-color)" }}>
                     <th className="text-left text-[10px] uppercase tracking-[1.5px] font-medium py-2 px-3" style={{ color: "var(--text-muted)" }}>
-                      Employee
+                      Contractor
                     </th>
                     {Array.from({ length: monthWeekCount }, (_, i) => (
                       <th key={i} className="text-center text-[10px] uppercase tracking-[1.5px] font-medium py-2 px-2 min-w-[60px]" style={{ color: "var(--text-muted)" }}>
@@ -618,7 +838,7 @@ export default function TimeClockAdmin() {
                   </tr>
                 </thead>
                 <tbody>
-                  {monthlySummary.map(({ employee, weeklyHours, monthlyTotal }) => (
+                  {filteredMonthlySummary.map(({ employee, weeklyHours, monthlyTotal }) => (
                     <tr key={employee.id} style={{ borderBottom: "1px solid var(--border-light)" }}>
                       <td className="py-3 px-3" style={{ color: "var(--text-primary)" }}>
                         {employee.first_name} {employee.last_name}
@@ -637,10 +857,10 @@ export default function TimeClockAdmin() {
                       </td>
                     </tr>
                   ))}
-                  {monthlySummary.length === 0 && (
+                  {filteredMonthlySummary.length === 0 && (
                     <tr>
                       <td colSpan={monthWeekCount + 2} className="py-8 text-center" style={{ color: "var(--text-muted)" }}>
-                        No active employees.
+                        No active contractors.
                       </td>
                     </tr>
                   )}
@@ -650,41 +870,16 @@ export default function TimeClockAdmin() {
           </div>
         )}
 
+        {/* ─── CREW ENTRY TAB ─── */}
+        {activeTab === "crew" && (
+          <div className="max-w-5xl py-8 text-center" style={{ color: "var(--text-muted)" }}>
+            Crew Entry coming in next task...
+          </div>
+        )}
+
         {/* ─── SETTINGS TAB ─── */}
         {activeTab === "settings" && (
           <div className="max-w-lg">
-            <div className="p-5 rounded-lg border mb-6" style={{ background: "var(--card-bg)", borderColor: "var(--border-color)" }}>
-              <h3 className="text-[10px] font-sans uppercase tracking-[2px] mb-4 font-medium" style={{ color: "var(--text-muted)" }}>
-                Overtime Thresholds
-              </h3>
-              <div className="flex gap-4 mb-3">
-                <div className="flex-1">
-                  <label className="text-[10px] font-sans uppercase tracking-[1px] mb-1 block" style={{ color: "var(--text-muted)" }}>
-                    Daily (hours)
-                  </label>
-                  <input
-                    type="number"
-                    value={settDailyThreshold}
-                    onChange={(e) => setSettDailyThreshold(e.target.value)}
-                    className="w-full px-3 py-2 border rounded text-sm font-sans outline-none"
-                    style={{ background: "var(--input-bg)", borderColor: "var(--border-light)", color: "var(--text-primary)" }}
-                  />
-                </div>
-                <div className="flex-1">
-                  <label className="text-[10px] font-sans uppercase tracking-[1px] mb-1 block" style={{ color: "var(--text-muted)" }}>
-                    Weekly (hours)
-                  </label>
-                  <input
-                    type="number"
-                    value={settWeeklyThreshold}
-                    onChange={(e) => setSettWeeklyThreshold(e.target.value)}
-                    className="w-full px-3 py-2 border rounded text-sm font-sans outline-none"
-                    style={{ background: "var(--input-bg)", borderColor: "var(--border-light)", color: "var(--text-primary)" }}
-                  />
-                </div>
-              </div>
-            </div>
-
             <div className="p-5 rounded-lg border mb-6" style={{ background: "var(--card-bg)", borderColor: "var(--border-color)" }}>
               <h3 className="text-[10px] font-sans uppercase tracking-[2px] mb-4 font-medium" style={{ color: "var(--text-muted)" }}>
                 Location (for future GPS)
