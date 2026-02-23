@@ -1,4 +1,4 @@
-import type { TCEmployee, TCTimeEntry } from "@/types/timeclock";
+import type { TCEmployee, TCTimeEntry, TCCompany, TCJob } from "@/types/timeclock";
 
 function getHours(entry: TCTimeEntry): number {
   const start = new Date(entry.clock_in).getTime();
@@ -22,7 +22,7 @@ export async function exportDailyCSV(
   const Papa = (await import("papaparse")).default;
 
   const rows = dailyEntries.map(({ employee, entry, hours, jobName }) => ({
-    "Employee #": employee.employee_number,
+    "Resource #": employee.employee_number,
     "Name": `${employee.first_name} ${employee.last_name}`,
     "Job": jobName || "",
     "Clock In": formatTime(entry.clock_in),
@@ -48,7 +48,7 @@ export async function exportWeeklyCSV(
 
   const rows = weeklySummary.map(({ employee, dailyHours, weeklyTotal }) => {
     const row: Record<string, string> = {
-      "Employee #": employee.employee_number,
+      "Resource #": employee.employee_number,
       "Name": `${employee.first_name} ${employee.last_name}`,
     };
     days.forEach((day, i) => {
@@ -75,7 +75,7 @@ export async function exportMonthlyCSV(
 
   const rows = monthlySummary.map(({ employee, weeklyHours, monthlyTotal }) => {
     const row: Record<string, string> = {
-      "Employee #": employee.employee_number,
+      "Resource #": employee.employee_number,
       "Name": `${employee.first_name} ${employee.last_name}`,
     };
     weeklyHours.forEach((h, i) => {
@@ -88,6 +88,50 @@ export async function exportMonthlyCSV(
   const csv = Papa.unparse(rows);
   const monthName = new Date(year, month).toLocaleString("default", { month: "long" }).toLowerCase();
   downloadCSV(csv, `timeclock-monthly-${monthName}-${year}.csv`);
+}
+
+export async function exportApprovedCSV(
+  entries: TCTimeEntry[],
+  employees: TCEmployee[],
+  companies: TCCompany[],
+  jobs: TCJob[],
+  dateRange: { start: Date; end: Date }
+) {
+  const Papa = (await import("papaparse")).default;
+
+  const approved = entries.filter((e) => {
+    const ci = new Date(e.clock_in);
+    return e.approval_status === "approved" && ci >= dateRange.start && ci <= dateRange.end;
+  });
+
+  const rows = approved.map((entry) => {
+    const emp = employees.find((e) => e.id === entry.employee_id);
+    const company = emp ? companies.find((c) => c.id === emp.company_id) : null;
+    const job = entry.job_id ? jobs.find((j) => j.id === entry.job_id) : null;
+    const hours = entry.clock_out
+      ? (new Date(entry.clock_out).getTime() - new Date(entry.clock_in).getTime()) / (1000 * 60 * 60)
+      : 0;
+    const rate = emp?.billable_rate || 0;
+
+    return {
+      "Company": company?.name || "",
+      "Resource #": emp?.employee_number || "",
+      "Contractor Name": emp ? `${emp.first_name} ${emp.last_name}` : "",
+      "Job": job?.name || "",
+      "Date": new Date(entry.clock_in).toLocaleDateString(),
+      "Clock In": new Date(entry.clock_in).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      "Clock Out": entry.clock_out ? new Date(entry.clock_out).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "",
+      "Hours": hours.toFixed(2),
+      "Billable Rate": rate.toFixed(2),
+      "Total": (hours * rate).toFixed(2),
+      "Approved By": entry.approved_by || "",
+      "Approved At": entry.approved_at ? new Date(entry.approved_at).toLocaleString() : "",
+    };
+  });
+
+  const csv = Papa.unparse(rows);
+  const dateStr = dateRange.start.toISOString().slice(0, 10);
+  downloadCSV(csv, `approved-time-entries-${dateStr}.csv`);
 }
 
 function downloadCSV(csv: string, filename: string) {
