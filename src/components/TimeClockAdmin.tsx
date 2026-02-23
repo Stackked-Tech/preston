@@ -15,7 +15,7 @@ import { exportDailyCSV, exportWeeklyCSV, exportMonthlyCSV } from "@/lib/timeClo
 import ApprovalQueue from "@/components/time-clock/ApprovalQueue";
 import CrewEntry from "@/components/time-clock/CrewEntry";
 
-type Tab = "companies" | "contractors" | "jobs" | "approval" | "daily" | "weekly" | "monthly" | "crew" | "settings";
+type Tab = "contractors" | "jobs" | "approval" | "daily" | "weekly" | "monthly" | "crew" | "settings";
 
 export default function TimeClockAdmin() {
   const { theme, toggleTheme } = useTheme();
@@ -211,7 +211,6 @@ export default function TimeClockAdmin() {
       <div className="px-6 pt-4 flex gap-1 border-b overflow-x-auto" style={{ borderColor: "var(--border-light)" }}>
         {([
           { key: "approval", label: "Approval Queue" },
-          { key: "companies", label: "Companies" },
           { key: "contractors", label: "Contractors" },
           { key: "jobs", label: "Jobs" },
           { key: "daily", label: "Daily Log" },
@@ -251,90 +250,6 @@ export default function TimeClockAdmin() {
         )}
 
         {/* ─── COMPANIES TAB ─── */}
-        {activeTab === "companies" && (
-          <div className="max-w-4xl">
-            {/* Add form */}
-            <div className="p-4 rounded-lg border mb-6" style={{ background: "var(--card-bg)", borderColor: "var(--border-color)" }}>
-              <h3 className="text-[10px] font-sans uppercase tracking-[2px] mb-3 font-medium" style={{ color: "var(--text-muted)" }}>
-                Add Company
-              </h3>
-              <div className="flex gap-3">
-                <input
-                  type="text"
-                  placeholder="Company Name"
-                  value={companyName}
-                  onChange={(e) => setCompanyName(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleAddCompany()}
-                  className="flex-1 px-3 py-2 border rounded text-sm font-sans outline-none"
-                  style={{ background: "var(--input-bg)", borderColor: "var(--border-light)", color: "var(--text-primary)" }}
-                />
-                <button
-                  onClick={handleAddCompany}
-                  disabled={!companyName.trim()}
-                  className="px-5 py-2 text-xs font-sans font-medium rounded border transition-all disabled:opacity-40"
-                  style={{ borderColor: "var(--gold)", background: "rgba(212,175,55,0.15)", color: "var(--gold)" }}
-                >
-                  Add
-                </button>
-              </div>
-            </div>
-
-            {/* Company table */}
-            <table className="w-full text-sm font-sans" style={{ borderCollapse: "collapse" }}>
-              <thead>
-                <tr style={{ borderBottom: "1px solid var(--border-color)" }}>
-                  {["Company Name", "Status", "Actions"].map((h) => (
-                    <th
-                      key={h}
-                      className="text-left text-[10px] uppercase tracking-[1.5px] font-medium py-2 px-3"
-                      style={{ color: "var(--text-muted)" }}
-                    >
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {companies.map((company) => (
-                  <tr key={company.id} style={{ borderBottom: "1px solid var(--border-light)" }}>
-                    <td className="py-3 px-3" style={{ color: "var(--text-primary)" }}>
-                      {company.name}
-                    </td>
-                    <td className="py-3 px-3">
-                      <span
-                        className="text-[10px] uppercase tracking-[1px] px-2 py-0.5 rounded"
-                        style={{
-                          color: company.is_active ? "#66bb6a" : "#78909c",
-                          background: company.is_active ? "rgba(102,187,106,0.1)" : "rgba(120,144,156,0.1)",
-                          border: `1px solid ${company.is_active ? "rgba(102,187,106,0.2)" : "rgba(120,144,156,0.2)"}`,
-                        }}
-                      >
-                        {company.is_active ? "Active" : "Inactive"}
-                      </span>
-                    </td>
-                    <td className="py-3 px-3">
-                      <button
-                        onClick={() => toggleCompanyActive(company.id, !company.is_active)}
-                        className="text-[10px] font-sans uppercase tracking-[1px] px-2.5 py-1 rounded border transition-all"
-                        style={{ borderColor: "var(--border-light)", color: "var(--text-muted)" }}
-                      >
-                        {company.is_active ? "Deactivate" : "Activate"}
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-                {companies.length === 0 && (
-                  <tr>
-                    <td colSpan={3} className="py-8 text-center" style={{ color: "var(--text-muted)" }}>
-                      No companies added yet.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
-
         {/* ─── CONTRACTORS TAB ─── */}
         {activeTab === "contractors" && (
           <div className="max-w-4xl">
