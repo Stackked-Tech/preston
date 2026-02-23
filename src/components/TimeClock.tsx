@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { useTheme } from "@/lib/theme";
-import { useEmployees, useTimeEntries, useJobs } from "@/lib/timeClockHooks";
+import { useEmployees, useTimeEntries, useJobs, useCompanies } from "@/lib/timeClockHooks";
 
 type Screen = "input" | "confirm" | "select-job" | "action";
 
@@ -12,6 +12,7 @@ export default function TimeClock() {
   const { employees, loading: empLoading, findByNumber } = useEmployees();
   const { entries, loading: entLoading, getOpenEntry, clockIn, clockOut, refetch: refetchEntries } = useTimeEntries();
   const { activeJobs, loading: jobsLoading } = useJobs();
+  const { companies } = useCompanies();
 
   const [screen, setScreen] = useState<Screen>("input");
   const [employeeNumber, setEmployeeNumber] = useState("");
@@ -69,7 +70,7 @@ export default function TimeClock() {
   const handleSubmitNumber = () => {
     const emp = findByNumber(employeeNumber);
     if (!emp) {
-      setMessage({ text: "Employee not found", type: "error" });
+      setMessage({ text: "Resource number not found", type: "error" });
       setTimeout(() => setMessage(null), 3000);
       return;
     }
@@ -190,7 +191,7 @@ export default function TimeClock() {
               R Alexander Time Clock
             </h1>
             <p className="text-[11px] font-sans tracking-[2px] uppercase mt-0.5" style={{ color: "var(--text-muted)" }}>
-              Employee Clock In / Out
+              Contractor Clock In / Out
             </p>
           </div>
         </div>
@@ -244,7 +245,7 @@ export default function TimeClock() {
           {screen === "input" && (
             <div>
               <p className="text-center text-[11px] font-sans uppercase tracking-[2px] mb-4" style={{ color: "var(--text-muted)" }}>
-                Enter your employee number
+                Enter your resource number
               </p>
 
               {/* Display */}
@@ -311,7 +312,7 @@ export default function TimeClock() {
                   {matchedEmployee.first_name} {matchedEmployee.last_name}
                 </p>
                 <p className="text-sm font-sans" style={{ color: "var(--text-muted)" }}>
-                  Employee #{matchedEmployee.employee_number}
+                  {(() => { const c = companies.find(c => c.id === matchedEmployee.company_id); return c ? c.name + " — " : ""; })()}Resource #{matchedEmployee.employee_number}
                 </p>
               </div>
 
@@ -353,35 +354,42 @@ export default function TimeClock() {
               </p>
 
               <div className="space-y-3">
-                {activeJobs.map((job) => (
-                  <button
-                    key={job.id}
-                    onClick={() => handleSelectJob(job.id)}
-                    className="w-full py-5 rounded-xl text-xl font-sans font-medium transition-all active:scale-95 border-2"
-                    style={{
-                      background: "rgba(212,175,55,0.08)",
-                      borderColor: "var(--border-color)",
-                      color: "var(--text-primary)",
-                    }}
-                  >
-                    {job.name}
-                  </button>
-                ))}
-                {activeJobs.length === 0 && (
-                  <div className="py-6" style={{ color: "var(--text-muted)" }}>
-                    <p className="text-sm font-sans mb-4">No jobs configured.</p>
-                    <button
-                      onClick={() => {
-                        setScreen("action");
-                        resetInactivityTimer();
-                      }}
-                      className="px-6 py-3 rounded-xl text-sm font-sans font-medium transition-all border"
-                      style={{ borderColor: "var(--gold)", color: "var(--gold)" }}
-                    >
-                      Continue without job
-                    </button>
-                  </div>
-                )}
+                {(() => {
+                  const companyJobs = activeJobs.filter(j => j.company_id === matchedEmployee?.company_id);
+                  return (
+                    <>
+                      {companyJobs.map((job) => (
+                        <button
+                          key={job.id}
+                          onClick={() => handleSelectJob(job.id)}
+                          className="w-full py-5 rounded-xl text-xl font-sans font-medium transition-all active:scale-95 border-2"
+                          style={{
+                            background: "rgba(212,175,55,0.08)",
+                            borderColor: "var(--border-color)",
+                            color: "var(--text-primary)",
+                          }}
+                        >
+                          {job.name}
+                        </button>
+                      ))}
+                      {companyJobs.length === 0 && (
+                        <div className="py-6" style={{ color: "var(--text-muted)" }}>
+                          <p className="text-sm font-sans mb-4">No jobs configured.</p>
+                          <button
+                            onClick={() => {
+                              setScreen("action");
+                              resetInactivityTimer();
+                            }}
+                            className="px-6 py-3 rounded-xl text-sm font-sans font-medium transition-all border"
+                            style={{ borderColor: "var(--gold)", color: "var(--gold)" }}
+                          >
+                            Continue without job
+                          </button>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
 
               <button
