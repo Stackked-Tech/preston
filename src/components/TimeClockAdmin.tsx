@@ -12,6 +12,8 @@ import {
   useJobs,
 } from "@/lib/timeClockHooks";
 import { exportDailyCSV, exportWeeklyCSV, exportMonthlyCSV } from "@/lib/timeClockExport";
+import ApprovalQueue from "@/components/time-clock/ApprovalQueue";
+import CrewEntry from "@/components/time-clock/CrewEntry";
 
 type Tab = "companies" | "contractors" | "jobs" | "approval" | "daily" | "weekly" | "monthly" | "crew" | "settings";
 
@@ -237,9 +239,15 @@ export default function TimeClockAdmin() {
 
         {/* ─── APPROVAL QUEUE TAB ─── */}
         {activeTab === "approval" && (
-          <div className="max-w-5xl py-8 text-center" style={{ color: "var(--text-muted)" }}>
-            Approval Queue coming in next task...
-          </div>
+          <ApprovalQueue
+            entries={entries}
+            employees={employees}
+            companies={companies}
+            jobs={jobs}
+            onApprove={approveEntry}
+            onFlag={flagEntry}
+            onBulkApprove={bulkApprove}
+          />
         )}
 
         {/* ─── COMPANIES TAB ─── */}
@@ -872,9 +880,13 @@ export default function TimeClockAdmin() {
 
         {/* ─── CREW ENTRY TAB ─── */}
         {activeTab === "crew" && (
-          <div className="max-w-5xl py-8 text-center" style={{ color: "var(--text-muted)" }}>
-            Crew Entry coming in next task...
-          </div>
+          <CrewEntry
+            employees={employees}
+            companies={companies}
+            jobs={jobs}
+            getJobsByCompany={getJobsByCompany}
+            onBatchClockIn={batchClockIn}
+          />
         )}
 
         {/* ─── SETTINGS TAB ─── */}
