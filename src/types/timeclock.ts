@@ -1,9 +1,20 @@
+export interface TCCompany {
+  id: string;
+  name: string;
+  is_active: boolean;
+  created_at: string;
+}
+
+export type TCCompanyInsert = Omit<TCCompany, "id" | "created_at">;
+
 export interface TCEmployee {
   id: string;
   employee_number: string;
   first_name: string;
   last_name: string;
   is_active: boolean;
+  company_id: string | null;
+  billable_rate: number;
   created_at: string;
 }
 
@@ -14,6 +25,7 @@ export interface TCJob {
   id: string;
   name: string;
   is_active: boolean;
+  company_id: string | null;
   created_at: string;
 }
 
@@ -26,6 +38,10 @@ export interface TCTimeEntry {
   clock_in: string;
   clock_out: string | null;
   notes: string;
+  approval_status: "pending" | "approved" | "flagged";
+  approved_by: string | null;
+  approved_at: string | null;
+  flag_note: string | null;
   created_at: string;
 }
 
@@ -39,11 +55,6 @@ export interface TCSetting {
   updated_at: string;
 }
 
-export interface TCOvertimeSettings {
-  daily_threshold: number;
-  weekly_threshold: number;
-}
-
 export interface TCLocationSettings {
   name: string;
   lat: number | null;
@@ -55,17 +66,14 @@ export interface TCDailyEntry {
   employee: TCEmployee;
   entry: TCTimeEntry;
   hours: number;
-  isOvertime: boolean;
   isStale: boolean;
   jobName: string | null;
 }
 
 export interface TCWeeklySummary {
   employee: TCEmployee;
-  dailyHours: number[]; // Mon-Sun
+  dailyHours: number[];
   weeklyTotal: number;
-  isWeeklyOvertime: boolean;
-  dailyOvertimeFlags: boolean[];
 }
 
 export interface TCMonthlySummary {
