@@ -12,6 +12,7 @@ import {
   computePayPeriodConfig,
   branchSlug,
 } from "@/lib/payrollConfig";
+import { parseColorChargesCSV } from "@/lib/colorChargesParser";
 import { supabase } from "@/lib/supabase";
 
 export const maxDuration = 300; // 5 min for Vercel (Pro plan)
@@ -28,7 +29,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { branchId, startDate, endDate } = body;
+    const { branchId, startDate, endDate, colorChargesCsv } = body;
 
     if (!branchId || !startDate || !endDate) {
       return NextResponse.json(
@@ -114,6 +115,17 @@ export async function POST(request: NextRequest) {
       endDate,
       payPeriod.week1End
     );
+
+    // 4b. Apply color charges if CSV provided
+    if (colorChargesCsv && typeof colorChargesCsv === "string") {
+      const colorResult = parseColorChargesCSV(colorChargesCsv, branch);
+      for (const [staffName, amount] of Object.entries(colorResult.charges)) {
+        if (results.staffData[staffName]) {
+          results.staffData[staffName].colorCharges = amount;
+        }
+      }
+      results.warnings.push(...colorResult.warnings);
+    }
 
     // 5. Generate Excel
     const excelBuffer = await generatePayrollExcel(results, branch, payPeriod);

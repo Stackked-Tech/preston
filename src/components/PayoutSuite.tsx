@@ -60,6 +60,11 @@ export default function PayoutSuite() {
   // Active tab
   const [activeTab, setActiveTab] = useState(BRANCHES[0].branchId);
 
+  // Color charges CSV per branch (keyed by branchId)
+  const [colorChargesCsvs, setColorChargesCsvs] = useState<
+    Record<string, string>
+  >({});
+
   // Running state
   const isRunning = Object.values(results).some((r) => r.status === "running");
 
@@ -71,6 +76,29 @@ export default function PayoutSuite() {
         return `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()}`;
       })()
     : "";
+
+  // ── Handle color charges CSV upload ──
+  const handleColorChargesUpload = useCallback(
+    (branchId: string, file: File) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const text = e.target?.result as string;
+        if (text) {
+          setColorChargesCsvs((prev) => ({ ...prev, [branchId]: text }));
+        }
+      };
+      reader.readAsText(file);
+    },
+    []
+  );
+
+  const clearColorCharges = useCallback((branchId: string) => {
+    setColorChargesCsvs((prev) => {
+      const next = { ...prev };
+      delete next[branchId];
+      return next;
+    });
+  }, []);
 
   // ── Run payroll for all configured branches ──
   const runPayroll = useCallback(async () => {
@@ -99,6 +127,7 @@ export default function PayoutSuite() {
             branchId: branch.branchId,
             startDate,
             endDate,
+            colorChargesCsv: colorChargesCsvs[branch.branchId] || null,
           }),
         });
 
@@ -131,7 +160,7 @@ export default function PayoutSuite() {
     });
 
     await Promise.allSettled(promises);
-  }, [startDate, endDate]);
+  }, [startDate, endDate, colorChargesCsvs]);
 
   // ── Download XLSX ──
   const downloadExcel = useCallback(
@@ -335,6 +364,69 @@ export default function PayoutSuite() {
 
       {/* Tab Content */}
       <main className="flex-1 px-6 py-6 overflow-auto">
+        {/* Color Report CSV upload — per branch, shown for all configured branches */}
+        {activeResult?.status !== "unconfigured" && (
+          <div
+            className="mb-4 flex items-center gap-3 px-4 py-3 rounded-lg border"
+            style={{
+              borderColor: colorChargesCsvs[activeTab]
+                ? "var(--gold)"
+                : "var(--border-light)",
+              background: colorChargesCsvs[activeTab]
+                ? "rgba(212, 175, 55, 0.04)"
+                : "var(--card-bg)",
+            }}
+          >
+            <span
+              className="text-xs font-sans"
+              style={{ color: "var(--text-muted)" }}
+            >
+              Color Report
+            </span>
+            <label
+              className="px-3 py-1.5 rounded-md border text-xs font-sans cursor-pointer transition-all"
+              style={{
+                background: "var(--input-bg)",
+                borderColor: colorChargesCsvs[activeTab]
+                  ? "var(--gold)"
+                  : "var(--border-light)",
+                color: colorChargesCsvs[activeTab]
+                  ? "var(--gold)"
+                  : "var(--text-secondary)",
+              }}
+            >
+              {colorChargesCsvs[activeTab] ? "Loaded ✓" : "Upload CSV"}
+              <input
+                type="file"
+                accept=".csv"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleColorChargesUpload(activeTab, file);
+                  e.target.value = "";
+                }}
+              />
+            </label>
+            {colorChargesCsvs[activeTab] && (
+              <button
+                onClick={() => clearColorCharges(activeTab)}
+                className="text-xs font-sans"
+                style={{ color: "var(--text-muted)" }}
+              >
+                Clear
+              </button>
+            )}
+            {!colorChargesCsvs[activeTab] && (
+              <span
+                className="text-[10px] font-sans"
+                style={{ color: "var(--text-muted)" }}
+              >
+                Upload the Phorest color stylist list report to auto-fill Column P
+              </span>
+            )}
+          </div>
+        )}
+
         {activeResult?.status === "unconfigured" && (
           <div
             className="text-center py-16"
@@ -508,14 +600,14 @@ function BranchResults({
 
   // Build computed rows
   const rows = staffOrder.map((name) => {
-    const d = staffData[name] || { productWk1: 0, productWk2: 0, contractorService: 0, associatePay: 0, tips: 0, newGuests: 0, employeePurchases: 0 };
+    const d = staffData[name] || { productWk1: 0, productWk2: 0, contractorService: 0, associatePay: 0, tips: 0, newGuests: 0, employeePurchases: 0, creditCardAmount: 0, colorCharges: 0 };
     const cfg = staffConfig[name];
     const rebateWk1 = boothRentRebate(d.productWk1);
     const rebateWk2 = boothRentRebate(d.productWk2);
     const rebateTotal = rebateWk1 + rebateWk2;
     const totalEarned = rebateTotal + d.tips + d.contractorService + d.associatePay;
-    const colorCharges = 0; // manual
-    const ccAmount = 0; // manual
+    const colorCharges = d.colorCharges ? -d.colorCharges : 0;
+    const ccAmount = d.creditCardAmount || 0;
     const ccCharges = 0.03 * -ccAmount;
     const findersFee = 0.2 * -(d.newGuests || 0);
     const empPurch = d.employeePurchases ? -d.employeePurchases : 0;
@@ -754,10 +846,10 @@ function BranchResults({
                   <td className={`${dc} text-right`} style={{ color: r.cfg.stationLease ? "#f87171" : "var(--text-muted)" }}>{fmtNeg(r.cfg.stationLease)}</td>
                   {/* O: Financial Services */}
                   <td className={`${dc} text-right`} style={{ color: r.cfg.financialServices ? "#f87171" : "var(--text-muted)" }}>{fmtNeg(r.cfg.financialServices)}</td>
-                  {/* P: Color Charges — manual */}
-                  <td className={`${dc} text-right`} style={{ color: "var(--text-muted)", background: manualBg }}></td>
-                  {/* Q: Credit Card Amount — manual */}
-                  <td className={`${dc} text-right`} style={{ color: "var(--text-muted)", background: manualBg }}></td>
+                  {/* P: Color Charges */}
+                  <td className={`${dc} text-right`} style={{ color: r.colorCharges ? "#f87171" : "var(--text-muted)", background: r.colorCharges ? undefined : manualBg }}>{fmtNeg(r.colorCharges)}</td>
+                  {/* Q: Credit Card Amount */}
+                  <td className={`${dc} text-right`} style={{ color: "var(--text-secondary)" }}>{fmt(r.ccAmount)}</td>
                   {/* R: CC Charges 3% — formula */}
                   <td className={`${dc} text-right`} style={{ color: "var(--text-muted)" }}>{fmt(r.ccCharges)}</td>
                   {/* S: New Guests */}
@@ -832,8 +924,8 @@ function BranchResults({
           style={{ background: manualBg, borderColor: "var(--border-light)" }}
         />
         <span>
-          <strong style={{ color: "var(--text-secondary)" }}>Highlighted cells</strong> require manual entry in the downloaded XLSX:
-          Color Charges (P), Credit Card Amount (Q), Total Emp. Withdrawal (footer).
+          <strong style={{ color: "var(--text-secondary)" }}>Highlighted cells</strong> require manual entry in the downloaded XLSX.
+          Upload a Color Report CSV to auto-fill Color Charges (P).
           Tips are GC-only — add cash tips manually.
         </span>
       </div>

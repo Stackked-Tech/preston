@@ -154,7 +154,11 @@ The pay period is split into two weeks for product sales:
 
 ### P: Color Charges (GL 4045)
 - **Value:** Negative amount representing color product cost deduction
-- **Source:** TBD — derivation not yet confirmed
+- **Source:** Phorest "Color Stylist List Report" export (separate from transaction CSV)
+- **Column used:** `Price` (negated — stored as positive in report, written as negative in payroll)
+- **Import:** Upload the color report CSV alongside the transaction export. The parser matches stylist names to configured staff using normalized name matching.
+- **Note:** The report has columns: Stylist, Cost, Price, Mark up. Only Price is used for Column P.
+- **Verified:** 8/18 exact match against reference (remaining discrepancies due to CSV being from a different date range than the reference period)
 
 ### Q: Credit Card Amount
 - **Formula:** `SUM(gross_total_amount for CC transactions) + SUM(gross_total_amount for GC transactions)`
@@ -263,7 +267,7 @@ These are prepayments, not service revenue. They should be **excluded** from ser
 | `Repeat Guest` | Returning client |
 | `216` | Unknown/legacy code |
 
-### Columns Not Yet Mapped
-| Column | Status |
-|---|---|
-| P: Color Charges (GL 4045) | Derivation not confirmed — negative amount, not raw color service revenue |
+### Columns Fully Mapped
+All columns (A through AF) are now mapped and automated. No manual entry columns remain except:
+- Total Emp. Withdrawal (footer) — manually entered
+- Tips (Col J) — GC-only; cash tips must be added manually

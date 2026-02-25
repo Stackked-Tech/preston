@@ -22,6 +22,7 @@ export interface StaffPayrollData {
   newGuests: number;
   employeePurchases: number;
   creditCardAmount: number;
+  colorCharges: number;
 }
 
 export interface PayrollResults {
@@ -110,6 +111,7 @@ export function processCSV(
       newGuests: 0,
       employeePurchases: 0,
       creditCardAmount: 0,
+      colorCharges: 0,
     };
   }
 
@@ -310,6 +312,7 @@ export function processCSV(
     d.newGuests = Math.round(d.newGuests * 100) / 100;
     d.employeePurchases = Math.round(d.employeePurchases * 100) / 100;
     d.creditCardAmount = Math.round(d.creditCardAmount * 100) / 100;
+    d.colorCharges = Math.round(d.colorCharges * 100) / 100;
   }
 
   return {
