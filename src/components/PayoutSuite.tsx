@@ -876,7 +876,8 @@ function PastRuns({ branchId }: { branchId: string }) {
     ? runs.filter((r) => r.runDate.startsWith(filterDate))
     : runs;
 
-  const downloadRun = async (run: ParsedRun) => {
+  // Sort by name desc works because filenames start with ISO timestamp (run-YYYY-MM-DD...)
+  const downloadRun = (run: ParsedRun) => {
     const slug = branchSlug(branchId);
     const { data } = supabase.storage
       .from("payroll")

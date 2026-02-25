@@ -33,6 +33,13 @@ const microApps = [
     icon: "/wh-logo-circle-bw.png",
     color: "#b5a49d",
   },
+  {
+    name: "Payout Suite",
+    description: "Payroll processing & NetSuite export",
+    href: "/payout-suite",
+    icon: "💲",
+    color: "#22c55e",
+  },
 ];
 
 export default function Home() {

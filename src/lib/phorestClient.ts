@@ -121,6 +121,93 @@ export async function fetchClientsBatch(
   return allClients;
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// CSV EXPORT JOB (for Payout Suite payroll processing)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+interface CsvExportJob {
+  jobId: string;
+  jobStatus: "QUEUED" | "RUNNING" | "DONE" | "FAILED";
+  totalRows?: number;
+  succeededRows?: number;
+  failureReason?: string;
+  tempCsvExternalUrl?: string;
+}
+
+async function phorestPost(
+  path: string,
+  body: Record<string, unknown>
+): Promise<Response> {
+  const url = `${getBaseUrl()}${path}`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: getAuthHeader(),
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Phorest API error ${res.status}: ${text}`);
+  }
+  return res;
+}
+
+/**
+ * Create a CSV export job for a branch's transactions.
+ */
+export async function createCsvExportJob(
+  branchId: string,
+  startDate: string,
+  endDate: string
+): Promise<CsvExportJob> {
+  const res = await phorestPost(
+    `/branch/${branchId}/csvexportjob`,
+    {
+      startFilter: startDate,
+      finishFilter: endDate,
+      jobType: "TRANSACTIONS_CSV",
+    }
+  );
+  return res.json();
+}
+
+/**
+ * Poll a CSV export job until it completes or times out.
+ */
+export async function pollCsvExportJob(
+  branchId: string,
+  jobId: string,
+  maxWaitMs = 600_000,
+  intervalMs = 5_000
+): Promise<CsvExportJob> {
+  const start = Date.now();
+  while (Date.now() - start < maxWaitMs) {
+    await new Promise((r) => setTimeout(r, intervalMs));
+    const res = await phorestFetch(
+      `/branch/${branchId}/csvexportjob/${jobId}`
+    );
+    const job: CsvExportJob = await res.json();
+    if (job.jobStatus === "DONE" || job.jobStatus === "FAILED") {
+      return job;
+    }
+  }
+  throw new Error(`CSV export job timed out after ${maxWaitMs / 1000}s`);
+}
+
+/**
+ * Download CSV content from a presigned URL.
+ */
+export async function downloadCsv(url: string): Promise<string> {
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error(`Failed to download CSV: ${res.status}`);
+  }
+  return res.text();
+}
+
 // Helper: split a date range into 1-month chunks for Phorest's appointment API
 function splitIntoMonthlyRanges(
   fromDate: string,
