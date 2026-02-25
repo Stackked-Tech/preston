@@ -20,6 +20,7 @@ No test framework is configured.
 1. **Brain Dump** (`/brain-dump`) — Project portfolio tracker with drag-and-drop requirements, tags, comments, attachments, and CSV/PDF export
 2. **R Alexander Time Clock** (`/time-clock`) — Employee time tracking with job assignments, overtime calculation, and reporting
 3. **Signed to Sealed** (`/signed-to-sealed`) — Document signature platform with PDF rendering, field placement, multi-recipient workflows, and audit trails
+4. **Payout Suite** (`/payout-suite`) — Phorest CSV → NetSuite payroll pipeline with per-branch staff config, XLSX generation, and Supabase storage
 
 ## Tech Stack
 
@@ -28,7 +29,8 @@ No test framework is configured.
 - **Tailwind CSS 3** — Styling with CSS custom properties for theming
 - **@dnd-kit** — Drag-and-drop (requirement sorting, signature field placement)
 - **react-pdf / pdfjs-dist** — PDF viewing; **jspdf** — PDF generation
-- **papaparse** — CSV export
+- **papaparse** — CSV parsing/export
+- **exceljs** — XLSX generation (Payout Suite payroll)
 
 ## Architecture
 
@@ -41,15 +43,24 @@ No test framework is configured.
 /time-clock/admin          → Admin panel (password gated)
 /signed-to-sealed          → Document management (password gated)
 /signed-to-sealed/sign     → Public signing via ?token= param
+/payout-suite              → Payroll pipeline (password gated)
 ```
 
 ### Data Layer
 
-All database access is **client-side via Supabase SDK** — there are no API routes or server actions. Each micro-app has its own custom hooks file that encapsulates CRUD operations with optimistic UI updates:
+Most database access is **client-side via Supabase SDK**. Each micro-app has its own custom hooks file that encapsulates CRUD operations with optimistic UI updates:
 
 - `src/lib/hooks.ts` — Brain Dump (`useProjects`)
 - `src/lib/timeClockHooks.ts` — Time Clock (`useEmployees`, `useJobs`, `useTimeEntries`)
 - `src/lib/signedToSealedHooks.ts` — Signed to Sealed (`useEnvelopes`, `useRecipients`, `useFields`, etc.)
+
+**Exception:** Payout Suite uses a server-side API route (`src/app/api/phorest/payroll/route.ts`) that calls the Phorest API, transforms CSV data, generates XLSX, and uploads to Supabase Storage. Key libs:
+- `src/lib/payrollTransform.ts` — Phorest CSV → per-staff payroll data
+- `src/lib/payrollExcel.ts` — XLSX generation for NetSuite import
+- `src/lib/payrollConfig.ts` — Branch/staff config with NetSuite IDs and fees
+- `src/lib/colorChargesParser.ts` — Color stylist report CSV parser
+- `src/lib/phorestClient.ts` — Phorest API client (CSV export jobs)
+- `Salon Exports/MAPPING-DOCUMENTATION.md` — Column-by-column mapping spec
 
 ### Type Definitions (`src/types/`)
 
@@ -69,7 +80,7 @@ No Supabase Auth — RLS policies are fully permissive (designed for shared tabl
 
 ### File Storage
 
-Supabase Storage buckets: `attachments` (Brain Dump files) and `sts-documents` (Signed to Sealed PDFs).
+Supabase Storage buckets: `attachments` (Brain Dump files), `sts-documents` (Signed to Sealed PDFs), and `payroll` (Payout Suite XLSX files).
 
 ## Database
 
@@ -86,6 +97,8 @@ Required in `.env.local` (see `.env.local.example`):
 ```
 NEXT_PUBLIC_SUPABASE_URL=<supabase-project-url>
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<supabase-anon-key>
+PHOREST_API_KEY=<phorest-api-key>           # Payout Suite
+PHOREST_API_SECRET=<phorest-api-secret>     # Payout Suite
 ```
 
 The Supabase client (`src/lib/supabase.ts`) creates a placeholder if env vars are missing — the app builds but shows error states at runtime.
