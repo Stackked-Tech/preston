@@ -153,6 +153,7 @@ export async function generatePayrollExcel(
       tips: 0,
       newGuests: 0,
       employeePurchases: 0,
+      creditCardAmount: 0,
     };
 
     const wsRow = ws.getRow(row);
@@ -213,8 +214,8 @@ export async function generatePayrollExcel(
     // P: Color Charges (blank — manual entry)
     wsRow.getCell(16).value = null;
 
-    // Q: Credit Card Amount (blank — manual entry)
-    wsRow.getCell(17).value = null;
+    // Q: Credit Card Amount
+    wsRow.getCell(17).value = data.creditCardAmount || null;
 
     // R: Credit Card Charges 3% — FORMULA
     wsRow.getCell(18).value = {

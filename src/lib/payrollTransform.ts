@@ -21,6 +21,7 @@ export interface StaffPayrollData {
   tips: number;
   newGuests: number;
   employeePurchases: number;
+  creditCardAmount: number;
 }
 
 export interface PayrollResults {
@@ -49,6 +50,7 @@ interface PhorestRow {
   payment_type_amounts?: string;
   payment_type_names?: string;
   phorest_tips?: string;
+  gross_total_amount?: string;
   [key: string]: string | undefined;
 }
 
@@ -107,6 +109,7 @@ export function processCSV(
       tips: 0,
       newGuests: 0,
       employeePurchases: 0,
+      creditCardAmount: 0,
     };
   }
 
@@ -128,6 +131,21 @@ export function processCSV(
 
   // Employee purchase amounts by client name (resolve to staff after)
   const empPurchasesByClient: Record<string, number> = {};
+
+  // Build per-transaction payment code lookup (first pass)
+  const txnPaymentCodes = new Map<string, Set<string>>();
+  for (const row of parsed.data) {
+    const tid = (row.transaction_id || "").trim();
+    if (!tid || txnPaymentCodes.has(tid)) continue;
+    const codes = new Set(
+      (row.payment_type_codes || "")
+        .trim()
+        .split(";")
+        .map((c) => c.trim())
+        .filter(Boolean)
+    );
+    txnPaymentCodes.set(tid, codes);
+  }
 
   for (const row of parsed.data) {
     const staffFirst = (row.staff_first_name || "").trim();
@@ -191,6 +209,27 @@ export function processCSV(
       ) {
         const unitPrice = parseFloat(row.unit_price || "0") || 0;
         staffData[staffName].newGuests += unitPrice;
+      }
+    }
+
+    // ── Credit Card Amount (Col Q) ──
+    // Sum gross_total_amount for SERVICE/PRODUCT in CC and GC transactions.
+    // Uses exclusive end date (purchased_date < periodEnd).
+    // CC;GC split transactions count in both sums (intentional double-count).
+    if (
+      (itemType === "SERVICE" || itemType === "PRODUCT") &&
+      purchasedDate &&
+      purchasedDate >= periodStart &&
+      purchasedDate < periodEnd
+    ) {
+      const gross = parseFloat(row.gross_total_amount || "0") || 0;
+      const codes = txnPaymentCodes.get(transactionId);
+      if (codes) {
+        const staffKey = staffName in staffData ? staffName : null;
+        if (staffKey) {
+          if (codes.has("CC")) staffData[staffKey].creditCardAmount += gross;
+          if (codes.has("GC")) staffData[staffKey].creditCardAmount += gross;
+        }
       }
     }
 
@@ -270,6 +309,7 @@ export function processCSV(
     d.tips = Math.round(d.tips * 100) / 100;
     d.newGuests = Math.round(d.newGuests * 100) / 100;
     d.employeePurchases = Math.round(d.employeePurchases * 100) / 100;
+    d.creditCardAmount = Math.round(d.creditCardAmount * 100) / 100;
   }
 
   return {
