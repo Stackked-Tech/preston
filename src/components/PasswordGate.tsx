@@ -2,7 +2,7 @@
 
 import { useState, useEffect, type ReactNode } from "react";
 
-const CORRECT_PASSWORD = "BT28012!";
+const CORRECT_PASSWORD = "Wilson26";
 const SESSION_KEY = "pw-authed";
 
 export default function PasswordGate({ children }: { children: ReactNode }) {
