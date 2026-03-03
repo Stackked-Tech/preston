@@ -159,14 +159,20 @@ export default function TimeClock() {
   };
 
   const loading = empLoading || entLoading || jobsLoading;
+  const [loadingTimedOut, setLoadingTimedOut] = useState(false);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: "var(--bg-primary)" }}>
-        <div className="text-xl font-sans" style={{ color: "var(--gold)" }}>Loading time clock...</div>
-      </div>
-    );
-  }
+  useEffect(() => {
+    if (loading) {
+      const timer = setTimeout(() => setLoadingTimedOut(true), 12000);
+      return () => clearTimeout(timer);
+    }
+    setLoadingTimedOut(false);
+  }, [loading]);
+
+  const handleRetry = () => {
+    setLoadingTimedOut(false);
+    window.location.reload();
+  };
 
   return (
     <div
@@ -227,6 +233,40 @@ export default function TimeClock() {
             </div>
           </div>
 
+          {/* Loading timeout warning */}
+          {loading && loadingTimedOut && (
+            <div
+              className="mb-6 p-5 rounded-lg text-center font-sans"
+              style={{
+                background: "rgba(239,83,80,0.1)",
+                border: "1px solid rgba(239,83,80,0.3)",
+              }}
+            >
+              <p className="text-sm font-medium mb-2" style={{ color: "#ef5350" }}>
+                Unable to connect to the server
+              </p>
+              <p className="text-xs mb-4" style={{ color: "var(--text-muted)" }}>
+                This may be a network issue or your browser may not be supported. Try refreshing or using a newer device.
+              </p>
+              <button
+                onClick={handleRetry}
+                className="px-6 py-2.5 rounded-lg text-sm font-medium transition-all border"
+                style={{ borderColor: "var(--gold)", color: "var(--gold)" }}
+              >
+                Retry
+              </button>
+            </div>
+          )}
+
+          {/* Connecting indicator */}
+          {loading && !loadingTimedOut && (
+            <div className="mb-4 text-center">
+              <p className="text-xs font-sans tracking-[1px] uppercase" style={{ color: "var(--text-muted)" }}>
+                Connecting...
+              </p>
+            </div>
+          )}
+
           {/* Message Banner */}
           {message && (
             <div
@@ -285,7 +325,7 @@ export default function TimeClock() {
               {/* Submit */}
               <button
                 onClick={handleSubmitNumber}
-                disabled={employeeNumber.length < 4}
+                disabled={employeeNumber.length < 4 || loading}
                 className="w-full py-4 rounded-xl text-lg font-sans font-semibold uppercase tracking-[2px] transition-all disabled:opacity-30"
                 style={{
                   background: "rgba(212,175,55,0.2)",
@@ -293,7 +333,7 @@ export default function TimeClock() {
                   color: "var(--gold)",
                 }}
               >
-                Enter
+                {loading ? "Connecting..." : "Enter"}
               </button>
             </div>
           )}
