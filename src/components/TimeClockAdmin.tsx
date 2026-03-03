@@ -15,7 +15,7 @@ import { exportDailyCSV, exportWeeklyCSV, exportMonthlyCSV } from "@/lib/timeClo
 import ApprovalQueue from "@/components/time-clock/ApprovalQueue";
 import CrewEntry from "@/components/time-clock/CrewEntry";
 
-type Tab = "contractors" | "jobs" | "approval" | "daily" | "weekly" | "monthly" | "crew" | "settings";
+type Tab = "contractors" | "companies" | "jobs" | "approval" | "daily" | "weekly" | "monthly" | "crew" | "settings";
 
 export default function TimeClockAdmin() {
   const { theme, toggleTheme } = useTheme();
@@ -23,7 +23,7 @@ export default function TimeClockAdmin() {
   const { employees, loading: empLoading, addEmployee, toggleActive, updateEmployee } = useEmployees();
   const { entries, loading: entLoading, updateEntry, refetch: refetchEntries, approveEntry, flagEntry, bulkApprove, batchClockIn } = useTimeEntries();
   const { location, loading: settLoading, updateLocation } = useTimeClockSettings();
-  const { jobs, loading: jobsLoading, addJob, toggleActive: toggleJobActive, getJobsByCompany } = useJobs();
+  const { jobs, loading: jobsLoading, addJob, updateJob, toggleActive: toggleJobActive, getJobsByCompany } = useJobs();
   const reports = useTimeClockReports(employees, entries, jobs);
 
   const [activeTab, setActiveTab] = useState<Tab>("approval");
@@ -211,6 +211,7 @@ export default function TimeClockAdmin() {
       <div className="px-6 pt-4 flex gap-1 border-b overflow-x-auto" style={{ borderColor: "var(--border-light)" }}>
         {([
           { key: "approval", label: "Approval Queue" },
+          { key: "companies", label: "Companies" },
           { key: "contractors", label: "Contractors" },
           { key: "jobs", label: "Jobs" },
           { key: "daily", label: "Daily Log" },
@@ -250,6 +251,105 @@ export default function TimeClockAdmin() {
         )}
 
         {/* ─── COMPANIES TAB ─── */}
+        {activeTab === "companies" && (
+          <div className="max-w-2xl">
+            {/* Add form */}
+            <div className="p-4 rounded-lg border mb-6" style={{ background: "var(--card-bg)", borderColor: "var(--border-color)" }}>
+              <h3 className="text-[10px] font-sans uppercase tracking-[2px] mb-3 font-medium" style={{ color: "var(--text-muted)" }}>
+                Add Company
+              </h3>
+              <div className="flex gap-3">
+                <input
+                  type="text"
+                  placeholder="Company Name"
+                  value={companyName}
+                  onChange={(e) => setCompanyName(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleAddCompany()}
+                  className="flex-1 px-3 py-2 border rounded text-sm font-sans outline-none"
+                  style={{ background: "var(--input-bg)", borderColor: "var(--border-light)", color: "var(--text-primary)" }}
+                />
+                <button
+                  onClick={handleAddCompany}
+                  disabled={!companyName.trim()}
+                  className="px-5 py-2 text-sm font-sans font-medium rounded border transition-all disabled:opacity-30"
+                  style={{ borderColor: "var(--gold)", color: "var(--gold)" }}
+                >
+                  Add
+                </button>
+              </div>
+            </div>
+
+            {/* Companies list */}
+            <div className="rounded-lg border overflow-hidden" style={{ borderColor: "var(--border-color)" }}>
+              <table className="w-full text-sm font-sans">
+                <thead>
+                  <tr style={{ background: "var(--bg-tertiary)" }}>
+                    {["Company Name", "Contractors", "Jobs", "Status", "Actions"].map((h) => (
+                      <th
+                        key={h}
+                        className="text-left px-4 py-3 text-[10px] uppercase tracking-[1px] font-medium"
+                        style={{ color: "var(--text-muted)" }}
+                      >
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {companies.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="px-4 py-8 text-center text-sm" style={{ color: "var(--text-muted)" }}>
+                        No companies yet. Add one above.
+                      </td>
+                    </tr>
+                  )}
+                  {companies.map((company) => {
+                    const compEmployees = employees.filter((e) => e.company_id === company.id);
+                    const compJobs = jobs.filter((j) => j.company_id === company.id);
+                    return (
+                      <tr
+                        key={company.id}
+                        className="border-t"
+                        style={{ borderColor: "var(--border-light)" }}
+                      >
+                        <td className="px-4 py-3 font-medium" style={{ color: "var(--text-primary)" }}>
+                          {company.name}
+                        </td>
+                        <td className="px-4 py-3" style={{ color: "var(--text-muted)" }}>
+                          {compEmployees.length}
+                        </td>
+                        <td className="px-4 py-3" style={{ color: "var(--text-muted)" }}>
+                          {compJobs.length}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span
+                            className="text-[10px] font-sans uppercase tracking-[1px] px-2 py-0.5 rounded"
+                            style={{
+                              background: company.is_active ? "rgba(102,187,106,0.15)" : "rgba(239,83,80,0.15)",
+                              color: company.is_active ? "#66bb6a" : "#ef5350",
+                            }}
+                          >
+                            {company.is_active ? "Active" : "Inactive"}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <button
+                            onClick={() => toggleCompanyActive(company.id, !company.is_active)}
+                            className="text-xs font-sans px-3 py-1 rounded border transition-all"
+                            style={{ borderColor: "var(--border-light)", color: "var(--text-muted)" }}
+                          >
+                            {company.is_active ? "Deactivate" : "Activate"}
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
         {/* ─── CONTRACTORS TAB ─── */}
         {activeTab === "contractors" && (
           <div className="max-w-4xl">
@@ -332,11 +432,27 @@ export default function TimeClockAdmin() {
                     <td className="py-3 px-3" style={{ color: "var(--text-primary)" }}>
                       {emp.first_name} {emp.last_name}
                     </td>
-                    <td className="py-3 px-3 text-xs" style={{ color: "var(--text-secondary)" }}>
-                      {companies.find((c) => c.id === emp.company_id)?.name || "-"}
+                    <td className="py-3 px-3">
+                      <select
+                        value={emp.company_id || ""}
+                        onChange={(e) => updateEmployee(emp.id, { company_id: e.target.value || undefined })}
+                        className="px-2 py-1 border rounded text-xs font-sans outline-none"
+                        style={{ background: "var(--input-bg)", borderColor: "var(--border-light)", color: "var(--text-primary)" }}
+                      >
+                        <option value="">No Company</option>
+                        {activeCompanies.map((c) => (
+                          <option key={c.id} value={c.id}>{c.name}</option>
+                        ))}
+                      </select>
                     </td>
-                    <td className="py-3 px-3 font-mono text-xs" style={{ color: "var(--text-primary)" }}>
-                      ${emp.billable_rate.toFixed(2)}/hr
+                    <td className="py-3 px-3">
+                      <input
+                        type="number"
+                        value={emp.billable_rate}
+                        onChange={(e) => updateEmployee(emp.id, { billable_rate: parseFloat(e.target.value) || 0 })}
+                        className="w-[90px] px-2 py-1 border rounded text-xs font-mono outline-none"
+                        style={{ background: "var(--input-bg)", borderColor: "var(--border-light)", color: "var(--text-primary)" }}
+                      />
                     </td>
                     <td className="py-3 px-3">
                       <span
@@ -434,8 +550,18 @@ export default function TimeClockAdmin() {
                     <td className="py-3 px-3" style={{ color: "var(--text-primary)" }}>
                       {job.name}
                     </td>
-                    <td className="py-3 px-3 text-xs" style={{ color: "var(--text-secondary)" }}>
-                      {companies.find((c) => c.id === job.company_id)?.name || "-"}
+                    <td className="py-3 px-3">
+                      <select
+                        value={job.company_id || ""}
+                        onChange={(e) => updateJob(job.id, { company_id: e.target.value || undefined })}
+                        className="px-2 py-1 border rounded text-xs font-sans outline-none"
+                        style={{ background: "var(--input-bg)", borderColor: "var(--border-light)", color: "var(--text-primary)" }}
+                      >
+                        <option value="">No Company</option>
+                        {activeCompanies.map((c) => (
+                          <option key={c.id} value={c.id}>{c.name}</option>
+                        ))}
+                      </select>
                     </td>
                     <td className="py-3 px-3">
                       <span

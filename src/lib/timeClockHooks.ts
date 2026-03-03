@@ -232,13 +232,24 @@ export function useJobs() {
     );
   };
 
+  const updateJob = async (id: string, updates: { company_id?: string }): Promise<void> => {
+    const { error } = await supabase
+      .from("tc_jobs")
+      .update(updates)
+      .eq("id", id);
+    if (error) throw error;
+    setJobs((prev) =>
+      prev.map((j) => (j.id === id ? { ...j, ...updates } : j))
+    );
+  };
+
   const getJobsByCompany = (companyId: string): TCJob[] => {
     return jobs.filter((j) => j.company_id === companyId && j.is_active);
   };
 
   const activeJobs = jobs.filter((j) => j.is_active);
 
-  return { jobs, activeJobs, loading, error, refetch: fetchJobs, addJob, toggleActive, getJobsByCompany };
+  return { jobs, activeJobs, loading, error, refetch: fetchJobs, addJob, updateJob, toggleActive, getJobsByCompany };
 }
 
 // ─── Time Entries ────────────────────────────────────────
