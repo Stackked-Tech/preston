@@ -9,6 +9,11 @@ import ExcelJS from "exceljs";
 import type { BranchConfig, PayPeriodConfig } from "./payrollConfig";
 import type { PayrollResults } from "./payrollTransform";
 
+const MONTH_ABBREVS = [
+  "JAN", "FEB", "MAR", "APR", "MAY", "JUN",
+  "JUL", "AUG", "SEP", "OCT", "NOV", "DEC",
+];
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // EXCEL GENERATION
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -176,7 +181,7 @@ export async function generatePayrollExcel(
 
     // F: Booth Rent Rebate (wk 1) — FORMULA
     wsRow.getCell(6).value = {
-      formula: `IF(E${row}>250,0.2,IF(E${row}>149,0.15,IF(E${row}>49,0.1,0)))*E${row}`,
+      formula: `ROUND(IF(E${row}>250,0.2,IF(E${row}>149,0.15,IF(E${row}>49,0.1,0)))*E${row},2)`,
     } as ExcelJS.CellFormulaValue;
 
     // G: Product Sales (wk 2)
@@ -184,12 +189,12 @@ export async function generatePayrollExcel(
 
     // H: Booth Rent Rebate (wk 2) — FORMULA
     wsRow.getCell(8).value = {
-      formula: `IF(G${row}>250,0.2,IF(G${row}>149,0.15,IF(G${row}>49,0.1,0)))*G${row}`,
+      formula: `ROUND(IF(G${row}>250,0.2,IF(G${row}>149,0.15,IF(G${row}>49,0.1,0)))*G${row},2)`,
     } as ExcelJS.CellFormulaValue;
 
     // I: Booth Rent Rebate Total — FORMULA
     wsRow.getCell(9).value = {
-      formula: `F${row}+H${row}`,
+      formula: `ROUND(F${row}+H${row},2)`,
     } as ExcelJS.CellFormulaValue;
 
     // J: Tips
@@ -203,7 +208,7 @@ export async function generatePayrollExcel(
 
     // M: Total Earned — FORMULA
     wsRow.getCell(13).value = {
-      formula: `SUM(I${row}+J${row}+K${row}+L${row})`,
+      formula: `ROUND(SUM(I${row}+J${row}+K${row}+L${row}),2)`,
     } as ExcelJS.CellFormulaValue;
 
     // N: Station Lease
@@ -220,7 +225,7 @@ export async function generatePayrollExcel(
 
     // R: Credit Card Charges 3% — FORMULA
     wsRow.getCell(18).value = {
-      formula: `0.03*(-Q${row})`,
+      formula: `ROUND(0.03*(-Q${row}),2)`,
     } as ExcelJS.CellFormulaValue;
 
     // S: New Guests
@@ -228,7 +233,7 @@ export async function generatePayrollExcel(
 
     // T: Finders Fee 20% — FORMULA
     wsRow.getCell(20).value = {
-      formula: `0.2*(-S${row})`,
+      formula: `ROUND(0.2*(-S${row}),2)`,
     } as ExcelJS.CellFormulaValue;
 
     // U: Employee Purchases
@@ -250,16 +255,15 @@ export async function generatePayrollExcel(
 
     // Z: Total Check — FORMULA
     wsRow.getCell(26).value = {
-      formula: `M${row}+(N${row}+O${row}+P${row}+R${row}+T${row}+U${row}+V${row}+W${row}+X${row}+Y${row})`,
+      formula: `ROUND(M${row}+(N${row}+O${row}+P${row}+R${row}+T${row}+U${row}+V${row}+W${row}+X${row}+Y${row}),2)`,
     } as ExcelJS.CellFormulaValue;
 
     // AA: Account
     wsRow.getCell(27).value = payPeriod.account;
 
-    // AB: Posting Period
-    wsRow.getCell(28).value = new Date(
-      payPeriod.postingPeriod + "T12:00:00"
-    );
+    // AB: Posting Period — format as "MAR-26" for NetSuite
+    const [ppYear, ppMonth] = payPeriod.postingPeriod.split("-");
+    wsRow.getCell(28).value = `${MONTH_ABBREVS[parseInt(ppMonth, 10) - 1]}-${ppYear.slice(2)}`;
 
     // AC: Reference #
     wsRow.getCell(29).value = payDateRef;
@@ -303,7 +307,7 @@ export async function generatePayrollExcel(
   ws.getRow(footerR1).getCell(3).value = footerLabel;
   ws.getRow(footerR1).getCell(25).value = "TOTAL PAYROLL:";
   ws.getRow(footerR1).getCell(26).value = {
-    formula: `SUM(Z4:Z${lastDataRow})`,
+    formula: `ROUND(SUM(Z4:Z${lastDataRow}),2)`,
   } as ExcelJS.CellFormulaValue;
 
   ws.getRow(footerR2).getCell(3).value = "Pay Period:";
@@ -316,7 +320,7 @@ export async function generatePayrollExcel(
   );
   ws.getRow(footerR3).getCell(25).value = "TOTAL ACH:";
   ws.getRow(footerR3).getCell(26).value = {
-    formula: `Z${footerR1}+Z${footerR2}`,
+    formula: `ROUND(Z${footerR1}+Z${footerR2},2)`,
   } as ExcelJS.CellFormulaValue;
 
   // Write to buffer

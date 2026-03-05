@@ -498,20 +498,20 @@ const SPA_ORDER = [
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const BALLARDS_STAFF: Record<string, StaffMember> = {
-  "Bryan Walls": { targetFirst: "Bryan", targetLast: "Walls", internalId: 0, stationLease: 0, financialServices: 0, phorestFee: 0, refreshment: 0 },
-  "Dustin G Goodson": { targetFirst: "Dustin G", targetLast: "Goodson", internalId: 0, stationLease: 0, financialServices: 0, phorestFee: 0, refreshment: 0 },
-  "Dustin H Helms": { targetFirst: "Dustin H", targetLast: "Helms", internalId: 0, stationLease: 0, financialServices: 0, phorestFee: 0, refreshment: 0 },
-  "Dustin P Prince": { targetFirst: "Dustin P", targetLast: "Prince", internalId: 0, stationLease: 0, financialServices: 0, phorestFee: 0, refreshment: 0 },
-  "Edward Trevino": { targetFirst: "Edward", targetLast: "Trevino", internalId: 0, stationLease: 0, financialServices: 0, phorestFee: 0, refreshment: 0 },
+  "Bryan Walls": { targetFirst: "Bryan", targetLast: "Walls", internalId: 2293, stationLease: -320, financialServices: -100, phorestFee: -10, refreshment: -10 },
+  "Dustin G Goodson": { targetFirst: "Dustin", targetLast: "Goodson", internalId: 2484, stationLease: -380, financialServices: -100, phorestFee: -10, refreshment: -10 },
+  "Dustin H Helms": { targetFirst: "Dustin", targetLast: "Helms", internalId: 1536, stationLease: -320, financialServices: -100, phorestFee: -10, refreshment: -10 },
+  "Dustin P Prince": { targetFirst: "Dustin", targetLast: "Prince", internalId: 1535, stationLease: -320, financialServices: -100, phorestFee: -10, refreshment: -10 },
+  "Edward Trevino": { targetFirst: "Edward", targetLast: "Trevino", internalId: 1537, stationLease: -320, financialServices: -100, phorestFee: -10, refreshment: -10 },
   "Hannah Fleming": { targetFirst: "Hannah", targetLast: "Fleming", internalId: 0, stationLease: 0, financialServices: 0, phorestFee: 0, refreshment: 0 },
   "Kendall Meek": { targetFirst: "Kendall", targetLast: "Meek", internalId: 0, stationLease: 0, financialServices: 0, phorestFee: 0, refreshment: 0 },
   "Kristen Forehand": { targetFirst: "Kristen", targetLast: "Forehand", internalId: 0, stationLease: 0, financialServices: 0, phorestFee: 0, refreshment: 0 },
-  "Owen Prince": { targetFirst: "Owen", targetLast: "Prince", internalId: 0, stationLease: 0, financialServices: 0, phorestFee: 0, refreshment: 0 },
+  "Owen Prince": { targetFirst: "Owen", targetLast: "Prince", internalId: 1550, stationLease: -320, financialServices: -100, phorestFee: -10, refreshment: -10 },
   "Patience Pearson": { targetFirst: "Patience", targetLast: "Pearson", internalId: 0, stationLease: 0, financialServices: 0, phorestFee: 0, refreshment: 0 },
-  "Ray Goodson": { targetFirst: "Ray", targetLast: "Goodson", internalId: 0, stationLease: 0, financialServices: 0, phorestFee: 0, refreshment: 0 },
-  "Rob Bumgardner": { targetFirst: "Rob", targetLast: "Bumgardner", internalId: 0, stationLease: 0, financialServices: 0, phorestFee: 0, refreshment: 0 },
+  "Ray Goodson": { targetFirst: "Ray", targetLast: "Goodson", internalId: 1553, stationLease: -320, financialServices: -100, phorestFee: -10, refreshment: -10 },
+  "Rob Bumgardner": { targetFirst: "Rob", targetLast: "Bumgardner", internalId: 1531, stationLease: -320, financialServices: -100, phorestFee: -10, refreshment: -10 },
   "Somer Wilson": { targetFirst: "Somer", targetLast: "Wilson", internalId: 0, stationLease: 0, financialServices: 0, phorestFee: 0, refreshment: 0 },
-  "Thomas Moore": { targetFirst: "Thomas", targetLast: "Moore", internalId: 0, stationLease: 0, financialServices: 0, phorestFee: 0, refreshment: 0 },
+  "Thomas Moore": { targetFirst: "Thomas", targetLast: "Moore", internalId: 2805, stationLease: -320, financialServices: -100, phorestFee: -10, refreshment: -10 },
 };
 
 const BALLARDS_ORDER = [
@@ -572,7 +572,7 @@ export const BRANCHES: BranchConfig[] = [
     branchId: "yrr4_ACmrRVr0J3NoC2s2Q",
     name: "Ballards Barbershop",
     abbreviation: "BALLARDS",
-    subsidiaryId: 5,
+    subsidiaryId: 7,
     account: 111,
     staffConfig: BALLARDS_STAFF,
     staffOrder: BALLARDS_ORDER,
