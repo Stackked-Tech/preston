@@ -536,6 +536,7 @@ export const BRANCHES: BranchConfig[] = [
     staffOrder: MOUNT_HOLLY_ORDER,
     employeePurchaseNameMap: {
       "Olivia Cornette": "Olivia Wilson",
+      "Maddie Shultz": "Maddie Schultz",
     },
   },
   {
