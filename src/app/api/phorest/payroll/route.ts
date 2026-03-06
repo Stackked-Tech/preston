@@ -7,8 +7,7 @@ import {
 import { processCSV } from "@/lib/payrollTransform";
 import { generatePayrollExcel } from "@/lib/payrollExcel";
 import {
-  getBranchConfig,
-  isBranchConfigured,
+  fetchBranchConfigs,
   computePayPeriodConfig,
   branchSlug,
 } from "@/lib/payrollConfig";
@@ -54,8 +53,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get branch config
-    const branch = getBranchConfig(branchId);
+    // Get branch config from DB
+    const allBranches = await fetchBranchConfigs();
+    const branch = allBranches.find((b) => b.branchId === branchId);
     if (!branch) {
       return NextResponse.json(
         { error: `Unknown branch: ${branchId}` },
@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!isBranchConfigured(branchId)) {
+    if (!branch || Object.keys(branch.staffConfig).length === 0) {
       return NextResponse.json(
         {
           error: `Branch "${branch.name}" is not yet configured with staff data`,
