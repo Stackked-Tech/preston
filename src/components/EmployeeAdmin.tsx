@@ -73,6 +73,7 @@ function StaffModal({
         refreshment: Number(form.refreshment) || 0,
         associate_pay: form.associate_pay.trim() !== "" ? Number(form.associate_pay) : null,
         supervisor: form.supervisor.trim() || null,
+        email: null,
         sort_order: Number(form.sort_order) || 0,
         is_active: localActive,
       };

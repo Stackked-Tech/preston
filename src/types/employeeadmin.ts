@@ -25,6 +25,7 @@ export interface EAStaff {
   refreshment: number;
   associate_pay: number | null;
   supervisor: string | null;
+  email: string | null;
   is_active: boolean;
   sort_order: number;
   created_at: string;
