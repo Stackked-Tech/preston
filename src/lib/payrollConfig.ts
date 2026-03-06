@@ -9,6 +9,8 @@
  * internalId and fees. Update these with actual NetSuite values before use.
  */
 
+import { supabase } from "./supabase";
+
 export interface StaffMember {
   targetFirst: string;
   targetLast: string;
@@ -599,4 +601,63 @@ export function branchSlug(branchId: string): string {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/(^-|-$)/g, "");
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// DB-BACKED CONFIG (compatibility layer — same BranchConfig[] shape)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export async function fetchBranchConfigs(): Promise<BranchConfig[]> {
+  const [branchRes, staffRes, overrideRes] = await Promise.all([
+    supabase.from("ea_branches").select("*").order("display_order"),
+    supabase.from("ea_staff").select("*").eq("is_active", true).order("sort_order"),
+    supabase.from("ea_name_overrides").select("*"),
+  ]);
+
+  if (branchRes.error) throw branchRes.error;
+  if (staffRes.error) throw staffRes.error;
+  if (overrideRes.error) throw overrideRes.error;
+
+  const branches = branchRes.data || [];
+  const allStaff = staffRes.data || [];
+  const allOverrides = overrideRes.data || [];
+
+  return branches.map((b) => {
+    const branchStaff = allStaff.filter((s) => s.branch_id === b.branch_id);
+    const branchOverrides = allOverrides.filter((o) => o.branch_id === b.branch_id);
+
+    const staffConfig: Record<string, StaffMember> = {};
+    const staffOrder: string[] = [];
+
+    for (const s of branchStaff) {
+      staffConfig[s.display_name] = {
+        targetFirst: s.target_first,
+        targetLast: s.target_last,
+        internalId: s.internal_id,
+        stationLease: Number(s.station_lease),
+        financialServices: Number(s.financial_services),
+        phorestFee: Number(s.phorest_fee),
+        refreshment: Number(s.refreshment),
+        associatePay: s.associate_pay != null ? Number(s.associate_pay) : null,
+        supervisor: s.supervisor,
+      };
+      staffOrder.push(s.display_name);
+    }
+
+    const employeePurchaseNameMap: Record<string, string> = {};
+    for (const o of branchOverrides) {
+      employeePurchaseNameMap[o.phorest_name] = o.staff_display_name;
+    }
+
+    return {
+      branchId: b.branch_id,
+      name: b.name,
+      abbreviation: b.abbreviation,
+      subsidiaryId: b.subsidiary_id,
+      account: b.account,
+      staffConfig,
+      staffOrder,
+      employeePurchaseNameMap,
+    };
+  });
 }
