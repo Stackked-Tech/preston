@@ -40,6 +40,13 @@ const microApps = [
     icon: "💲",
     color: "#22c55e",
   },
+  {
+    name: "Paramount Communications",
+    description: "SMS messaging & bulk communications",
+    href: "/paramount",
+    icon: "/pica-logo-bw.png",
+    color: "#f26539",
+  },
 ];
 
 export default function Home() {
