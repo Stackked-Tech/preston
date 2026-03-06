@@ -542,6 +542,7 @@ export default function PayoutSuite() {
         {activeResult?.status !== "unconfigured" && (
           <PastRuns
             branchId={activeTab}
+            branches={BRANCHES}
             key={`${activeTab}-${activeResult?.data?.payPeriod || "idle"}`}
           />
         )}
@@ -978,7 +979,7 @@ function BranchResults({
   );
 }
 
-function PastRuns({ branchId }: { branchId: string }) {
+function PastRuns({ branchId, branches }: { branchId: string; branches: BranchConfig[] }) {
   const [runs, setRuns] = useState<ParsedRun[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(false);
@@ -986,7 +987,7 @@ function PastRuns({ branchId }: { branchId: string }) {
 
   const fetchRuns = useCallback(async () => {
     setLoading(true);
-    const slug = branchSlug(branchId);
+    const slug = branchSlug(branchId, branches);
     const { data, error } = await supabase.storage
       .from("payroll")
       .list(slug, { sortBy: { column: "name", order: "desc" } });
@@ -1003,7 +1004,7 @@ function PastRuns({ branchId }: { branchId: string }) {
 
     setRuns(parsed);
     setLoading(false);
-  }, [branchId]);
+  }, [branchId, branches]);
 
   useEffect(() => {
     fetchRuns();
@@ -1015,7 +1016,7 @@ function PastRuns({ branchId }: { branchId: string }) {
 
   // Sort by name desc works because filenames start with ISO timestamp (run-YYYY-MM-DD...)
   const downloadRun = (run: ParsedRun) => {
-    const slug = branchSlug(branchId);
+    const slug = branchSlug(branchId, branches);
     const { data } = supabase.storage
       .from("payroll")
       .getPublicUrl(`${slug}/${run.fileName}`);

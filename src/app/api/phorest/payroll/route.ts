@@ -137,7 +137,7 @@ export async function POST(request: NextRequest) {
     try {
       const now = new Date();
       const timestamp = now.toISOString().replace(/[:.]/g, "-").slice(0, 19);
-      const slug = branchSlug(branchId);
+      const slug = branchSlug(branchId, allBranches);
       filePath = `${slug}/run-${timestamp}_period-${startDate}_to_${endDate}_pay-${payPeriod.payDate}.xlsx`;
 
       const { error: uploadError } = await supabase.storage
