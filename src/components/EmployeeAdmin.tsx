@@ -458,7 +458,7 @@ export default function EmployeeAdmin() {
               <table className="w-full">
                 <thead>
                   <tr style={{ borderBottom: "1px solid var(--border-color)" }}>
-                    {["Name", "NetSuite ID", "Station Lease", "Fin. Services", "Phorest", "Refreshment"].map(
+                    {["Name", "NetSuite ID", "Station Lease", "Fin. Services", "Phorest Fee", "Refreshment"].map(
                       (h) => (
                         <th
                           key={h}
