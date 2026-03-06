@@ -19,6 +19,7 @@ export default function TimeClock() {
   const [matchedEmployee, setMatchedEmployee] = useState<ReturnType<typeof findByNumber>>(undefined);
   const [openEntry, setOpenEntry] = useState<ReturnType<typeof getOpenEntry>>(undefined);
   const [selectedJobId, setSelectedJobId] = useState<string | undefined>(undefined);
+  const [isSwitching, setIsSwitching] = useState(false);
   const [message, setMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
   const [now, setNow] = useState(new Date());
 
@@ -40,6 +41,7 @@ export default function TimeClock() {
         setMatchedEmployee(undefined);
         setOpenEntry(undefined);
         setSelectedJobId(undefined);
+        setIsSwitching(false);
         setMessage(null);
       }, 30000);
     }
@@ -98,9 +100,36 @@ export default function TimeClock() {
     setEmployeeNumber("");
     setMatchedEmployee(undefined);
     setSelectedJobId(undefined);
+    setIsSwitching(false);
   };
 
-  const handleSelectJob = (jobId: string) => {
+  const handleSelectJob = async (jobId: string) => {
+    if (isSwitching && openEntry && matchedEmployee) {
+      // Switch job: clock out current, clock in new
+      try {
+        await clockOut(openEntry.id);
+        await clockIn(matchedEmployee.id, jobId);
+        const oldJobName = activeJobs.find((j) => j.id === openEntry.job_id)?.name;
+        const newJobName = activeJobs.find((j) => j.id === jobId)?.name;
+        setMessage({
+          text: `Switched${oldJobName ? ` from ${oldJobName}` : ""}${newJobName ? ` to ${newJobName}` : ""}! Keep it up, ${matchedEmployee.first_name}.`,
+          type: "success",
+        });
+        await refetchEntries();
+        setTimeout(() => {
+          setScreen("input");
+          setEmployeeNumber("");
+          setMatchedEmployee(undefined);
+          setOpenEntry(undefined);
+          setSelectedJobId(undefined);
+          setIsSwitching(false);
+          setMessage(null);
+        }, 4000);
+      } catch {
+        setMessage({ text: "Failed to switch jobs. Try again.", type: "error" });
+      }
+      return;
+    }
     setSelectedJobId(jobId);
     setScreen("action");
     resetInactivityTimer();
@@ -121,6 +150,7 @@ export default function TimeClock() {
         setMatchedEmployee(undefined);
         setOpenEntry(undefined);
         setSelectedJobId(undefined);
+        setIsSwitching(false);
         setMessage(null);
       }, 4000);
     } catch {
@@ -143,6 +173,7 @@ export default function TimeClock() {
         setMatchedEmployee(undefined);
         setOpenEntry(undefined);
         setSelectedJobId(undefined);
+        setIsSwitching(false);
         setMessage(null);
       }, 4000);
     } catch {
@@ -390,12 +421,12 @@ export default function TimeClock() {
                 {matchedEmployee.first_name} {matchedEmployee.last_name}
               </p>
               <p className="text-[11px] font-sans uppercase tracking-[2px] mb-6" style={{ color: "var(--text-muted)" }}>
-                Select your job
+                {isSwitching ? "Switch to which job?" : "Select your job"}
               </p>
 
               <div className="space-y-3">
                 {(() => {
-                  const companyJobs = activeJobs.filter(j => j.company_id === matchedEmployee?.company_id);
+                  const companyJobs = activeJobs.filter(j => j.company_id === matchedEmployee?.company_id && (!isSwitching || j.id !== openEntry?.job_id));
                   return (
                     <>
                       {companyJobs.map((job) => (
@@ -464,19 +495,44 @@ export default function TimeClock() {
                     <p className="text-sm font-sans mt-1" style={{ color: "var(--text-muted)" }}>
                       ({formatElapsed(openEntry.clock_in)})
                     </p>
+                    {openEntry.job_id && (
+                      <p className="text-sm font-sans mt-2 font-medium" style={{ color: "var(--gold)" }}>
+                        {activeJobs.find((j) => j.id === openEntry.job_id)?.name || "Unknown Job"}
+                      </p>
+                    )}
                   </div>
 
-                  <button
-                    onClick={handleClockOut}
-                    className="w-full py-6 rounded-xl text-2xl font-sans font-bold uppercase tracking-[3px] transition-all active:scale-95 border-2"
-                    style={{
-                      background: "rgba(239,83,80,0.15)",
-                      borderColor: "#ef5350",
-                      color: "#ef5350",
-                    }}
-                  >
-                    Clock Out
-                  </button>
+                  <div className="space-y-3">
+                    <button
+                      onClick={handleClockOut}
+                      className="w-full py-6 rounded-xl text-2xl font-sans font-bold uppercase tracking-[3px] transition-all active:scale-95 border-2"
+                      style={{
+                        background: "rgba(239,83,80,0.15)",
+                        borderColor: "#ef5350",
+                        color: "#ef5350",
+                      }}
+                    >
+                      Clock Out
+                    </button>
+
+                    {activeJobs.filter(j => j.company_id === matchedEmployee?.company_id).length > 1 && (
+                      <button
+                        onClick={() => {
+                          setIsSwitching(true);
+                          setScreen("select-job");
+                          resetInactivityTimer();
+                        }}
+                        className="w-full py-5 rounded-xl text-lg font-sans font-semibold uppercase tracking-[2px] transition-all active:scale-95 border-2"
+                        style={{
+                          background: "rgba(212,175,55,0.12)",
+                          borderColor: "var(--gold)",
+                          color: "var(--gold)",
+                        }}
+                      >
+                        Switch Job
+                      </button>
+                    )}
+                  </div>
                 </>
               ) : (
                 <button
