@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useEmployeeAuth } from "@/lib/employeeAuthHooks";
 import { useEmployeeFees } from "@/lib/employeePortalHooks";
@@ -12,10 +13,11 @@ export default function Dashboard() {
   const router = useRouter();
   const { theme } = useTheme();
 
-  if (!authLoading && !user) {
-    router.replace("/employee");
-    return null;
-  }
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.replace("/employee");
+    }
+  }, [authLoading, user, router]);
 
   const loading = authLoading || feesLoading;
 

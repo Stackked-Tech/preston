@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useEmployeeAuth } from "@/lib/employeeAuthHooks";
 import Image from "next/image";
@@ -16,10 +16,11 @@ export default function LoginPage() {
   const [submitting, setSubmitting] = useState(false);
 
   // Redirect if already authenticated
-  if (!loading && user) {
-    router.replace(onboardingComplete ? "/employee/dashboard" : "/employee/onboarding");
-    return null;
-  }
+  useEffect(() => {
+    if (!loading && user) {
+      router.replace(onboardingComplete ? "/employee/dashboard" : "/employee/onboarding");
+    }
+  }, [loading, user, onboardingComplete, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,7 +34,7 @@ export default function LoginPage() {
     }
   };
 
-  if (loading) {
+  if (loading || user) {
     return (
       <div
         className="min-h-screen flex items-center justify-center"

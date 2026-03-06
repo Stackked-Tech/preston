@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useEmployeeAuth } from "@/lib/employeeAuthHooks";
 import Image from "next/image";
@@ -12,14 +12,13 @@ export default function OnboardingPage() {
   const { theme } = useTheme();
   const [completing, setCompleting] = useState(false);
 
-  if (!loading && !user) {
-    router.replace("/employee");
-    return null;
-  }
-  if (!loading && onboardingComplete) {
-    router.replace("/employee/dashboard");
-    return null;
-  }
+  useEffect(() => {
+    if (!loading && !user) {
+      router.replace("/employee");
+    } else if (!loading && onboardingComplete) {
+      router.replace("/employee/dashboard");
+    }
+  }, [loading, user, onboardingComplete, router]);
 
   const handleContinue = async () => {
     setCompleting(true);
@@ -27,7 +26,7 @@ export default function OnboardingPage() {
     router.replace("/employee/dashboard");
   };
 
-  if (loading) {
+  if (loading || !user || onboardingComplete) {
     return (
       <div
         className="min-h-screen flex items-center justify-center"
@@ -61,7 +60,7 @@ export default function OnboardingPage() {
           className="font-serif text-2xl mt-6"
           style={{ color: "var(--gold)" }}
         >
-          Welcome to Preston
+          Welcome to The Employee Portal
         </h1>
         <p
           className="font-sans text-sm mt-3 leading-relaxed"
