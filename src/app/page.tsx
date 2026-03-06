@@ -47,6 +47,13 @@ const microApps = [
     icon: "/pica-logo-bw.png",
     color: "#f26539",
   },
+  {
+    name: "Employee Admin",
+    description: "Manage staff configuration across all branches",
+    href: "/employee-admin",
+    icon: "👥",
+    color: "#6366f1",
+  },
 ];
 
 export default function Home() {
