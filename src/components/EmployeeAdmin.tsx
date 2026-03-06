@@ -49,6 +49,7 @@ function StaffModal({
     associate_pay: staff?.associate_pay != null ? staff.associate_pay.toString() : "",
     supervisor: staff?.supervisor ?? "",
     sort_order: staff?.sort_order?.toString() ?? "0",
+    email: staff?.email ?? "",
   });
   const [saving, setSaving] = useState(false);
   const [localActive, setLocalActive] = useState(staff?.is_active ?? true);
@@ -73,7 +74,7 @@ function StaffModal({
         refreshment: Number(form.refreshment) || 0,
         associate_pay: form.associate_pay.trim() !== "" ? Number(form.associate_pay) : null,
         supervisor: form.supervisor.trim() || null,
-        email: null,
+        email: form.email.trim() || null,
         sort_order: Number(form.sort_order) || 0,
         is_active: localActive,
       };
@@ -234,6 +235,16 @@ function StaffModal({
               type="number"
               value={form.sort_order}
               onChange={(e) => setForm((f) => ({ ...f, sort_order: e.target.value }))}
+            />
+          </div>
+          <div className="col-span-2">
+            <label style={labelStyle}>Portal Email</label>
+            <input
+              style={inputStyle}
+              type="email"
+              value={form.email}
+              onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+              placeholder="employee@example.com"
             />
           </div>
         </div>
