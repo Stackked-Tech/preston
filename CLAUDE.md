@@ -15,7 +15,7 @@ No test framework is configured.
 
 ## Project Overview
 
-**WHB Companies Command Center** — A Next.js App Router application hosting six micro-apps:
+**WHB Companies Command Center** — A Next.js App Router application hosting seven micro-apps:
 
 1. **Brain Dump** (`/brain-dump`) — Project portfolio tracker with drag-and-drop requirements, tags, comments, attachments, and CSV/PDF export
 2. **R Alexander Time Clock** (`/time-clock`) — Employee time tracking with job assignments, overtime calculation, and reporting
@@ -23,6 +23,7 @@ No test framework is configured.
 4. **Payout Suite** (`/payout-suite`) — Phorest CSV → NetSuite payroll pipeline with per-branch staff config, XLSX generation, and Supabase storage
 5. **Paramount Communications** (`/paramount`) — SMS messaging portal with Twilio integration, 1:1 and bulk messaging, contact management with tags, scheduled messages, delivery tracking, broadcast history, and message search
 6. **Employee Admin** (`/employee-admin`) — Staff configuration management for payroll (names, NetSuite IDs, station leases, fees) across all WHB salon branches, backed by Supabase
+7. **Employee Portal** (`/employee`) — Employee-facing portal with Supabase Auth login, placeholder onboarding, and read-only fee dashboard
 
 ## Tech Stack
 
@@ -50,6 +51,9 @@ No test framework is configured.
 /payout-suite              → Payroll pipeline (password gated)
 /paramount                 → SMS portal (password gated)
 /employee-admin            → Staff configuration management (password gated)
+/employee                  → Employee login (Supabase Auth)
+/employee/onboarding       → First-login onboarding placeholder
+/employee/dashboard        → Fee summary dashboard (auth required)
 ```
 
 ### Data Layer
@@ -61,6 +65,8 @@ Most database access is **client-side via Supabase SDK**. Each micro-app has its
 - `src/lib/signedToSealedHooks.ts` — Signed to Sealed (`useEnvelopes`, `useRecipients`, `useFields`, etc.)
 - `src/lib/paramountHooks.ts` — Paramount Communications (`useContacts`, `useMessages`, `useSendMessage`, `useBulkSend`, `useScheduledMessages`, `useBroadcastHistory`, `useMessageSearch`) with Supabase Realtime subscriptions
 - `src/lib/employeeAdminHooks.ts` — Employee Admin (`useBranches`, `useStaff`, `useNameOverrides`)
+- `src/lib/employeeAuthHooks.ts` — Employee Portal (`useEmployeeAuth`)
+- `src/lib/employeePortalHooks.ts` — Employee Portal (`useEmployeeFees`)
 
 **Exception — Payout Suite:** Uses a server-side API route (`src/app/api/phorest/payroll/route.ts`) that calls the Phorest API, transforms CSV data, generates XLSX, and uploads to Supabase Storage.
 
@@ -82,11 +88,11 @@ Payout Suite key libs:
 
 ### Type Definitions (`src/types/`)
 
-Separate type files per domain: `database.ts` (Brain Dump), `timeclock.ts`, `signedtosealed.ts`, `paramount.ts`, `employeeadmin.ts`. Insert/Update types are derived from main types using `Omit`.
+Separate type files per domain: `database.ts` (Brain Dump), `timeclock.ts`, `signedtosealed.ts`, `paramount.ts`, `employeeadmin.ts`, `employeeportal.ts`. Insert/Update types are derived from main types using `Omit`.
 
 ### Component Structure
 
-Large feature components live in `src/components/`. Brain Dump, Time Clock, and Employee Admin are single-file components (`ProjectTracker.tsx`, `TimeClock.tsx`, `TimeClockAdmin.tsx`, `EmployeeAdmin.tsx`). Signed to Sealed is broken into ~13 smaller components in `src/components/signed-to-sealed/`. Paramount Communications uses 8 components in `src/components/paramount/`:
+Large feature components live in `src/components/`. Brain Dump, Time Clock, and Employee Admin are single-file components (`ProjectTracker.tsx`, `TimeClock.tsx`, `TimeClockAdmin.tsx`, `EmployeeAdmin.tsx`). Signed to Sealed is broken into ~13 smaller components in `src/components/signed-to-sealed/`. Employee Portal has three components in `src/components/employee-portal/` (LoginPage, OnboardingPage, Dashboard). Paramount Communications uses 8 components in `src/components/paramount/`:
 - `ParamountComms.tsx` — Main orchestrator (state, view routing, keyboard shortcuts)
 - `ConversationList.tsx` — Left sidebar with contacts, search, unread badges
 - `MessageThread.tsx` — Chat bubbles, delivery status icons, character counter, schedule picker
@@ -102,7 +108,7 @@ Dark/light mode via React Context + CSS variables. Theme persists in localStorag
 
 ### Security Model
 
-No Supabase Auth — RLS policies are fully permissive (designed for shared tablet use). Sensitive pages use `PasswordGate.tsx` with session-based access (sessionStorage). Public signing uses token-based access via URL parameter.
+No Supabase Auth for most micro-apps — RLS policies are fully permissive (designed for shared tablet use). Sensitive pages use `PasswordGate.tsx` with session-based access (sessionStorage). Public signing uses token-based access via URL parameter. **Exception:** Employee Portal uses Supabase Auth (email+password) — the only micro-app with real authentication. Employee accounts are created manually in the Supabase Dashboard.
 
 ### File Storage
 
