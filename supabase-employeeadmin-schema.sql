@@ -27,6 +27,7 @@ CREATE TABLE ea_staff (
   refreshment NUMERIC NOT NULL DEFAULT 0,
   associate_pay NUMERIC,
   supervisor TEXT,
+  email TEXT,
   is_active BOOLEAN NOT NULL DEFAULT true,
   sort_order INTEGER NOT NULL DEFAULT 0,
   created_at TIMESTAMPTZ DEFAULT NOW(),
