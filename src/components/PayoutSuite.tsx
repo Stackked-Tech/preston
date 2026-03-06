@@ -6,12 +6,11 @@ import Image from "next/image";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import {
-  BRANCHES,
-  isBranchConfigured,
+  fetchBranchConfigs,
   computePayDate,
   branchSlug,
 } from "@/lib/payrollConfig";
-import type { StaffMember } from "@/lib/payrollConfig";
+import type { BranchConfig, StaffMember } from "@/lib/payrollConfig";
 import type { StaffPayrollData } from "@/lib/payrollTransform";
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -42,23 +41,57 @@ interface BranchResult {
 export default function PayoutSuite() {
   const { theme, toggleTheme } = useTheme();
 
+  // Branch configs from DB
+  const [BRANCHES, setBranches] = useState<BranchConfig[]>([]);
+  const [branchesLoading, setBranchesLoading] = useState(true);
+
   // Date inputs
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
 
   // Per-branch results
-  const [results, setResults] = useState<Record<string, BranchResult>>(() => {
-    const initial: Record<string, BranchResult> = {};
-    for (const b of BRANCHES) {
-      initial[b.branchId] = {
-        status: isBranchConfigured(b.branchId) ? "idle" : "unconfigured",
-      };
-    }
-    return initial;
-  });
+  const [results, setResults] = useState<Record<string, BranchResult>>({});
 
   // Active tab
-  const [activeTab, setActiveTab] = useState(BRANCHES[0].branchId);
+  const [activeTab, setActiveTab] = useState("");
+
+  // Fetch branch configs on mount
+  useEffect(() => {
+    fetchBranchConfigs()
+      .then((configs) => {
+        setBranches(configs);
+        setBranchesLoading(false);
+      })
+      .catch((err) => {
+        console.error("Failed to fetch branch configs:", err);
+        setBranchesLoading(false);
+      });
+  }, []);
+
+  // Initialize results and active tab once branches load
+  useEffect(() => {
+    if (BRANCHES.length > 0 && !activeTab) {
+      setActiveTab(BRANCHES[0].branchId);
+    }
+    if (BRANCHES.length > 0 && Object.keys(results).length === 0) {
+      const initial: Record<string, BranchResult> = {};
+      for (const b of BRANCHES) {
+        initial[b.branchId] = {
+          status: Object.keys(b.staffConfig).length > 0 ? "idle" : "unconfigured",
+        };
+      }
+      setResults(initial);
+    }
+  }, [BRANCHES, activeTab, results]);
+
+  // Local helper to replace the imported isBranchConfigured
+  const isBranchConfigured = useCallback(
+    (branchId: string) => {
+      const branch = BRANCHES.find((b) => b.branchId === branchId);
+      return !!branch && Object.keys(branch.staffConfig).length > 0;
+    },
+    [BRANCHES]
+  );
 
   // Color charges CSV per branch (keyed by branchId)
   const [colorChargesCsvs, setColorChargesCsvs] = useState<
@@ -188,6 +221,18 @@ export default function PayoutSuite() {
 
   const activeBranch = BRANCHES.find((b) => b.branchId === activeTab);
   const activeResult = results[activeTab];
+
+  // Loading guard while branches are fetching
+  if (branchesLoading || BRANCHES.length === 0) {
+    return (
+      <div
+        className="min-h-screen flex items-center justify-center"
+        style={{ background: "var(--bg-primary)", color: "var(--text-muted)" }}
+      >
+        <p className="text-sm font-sans">Loading branches...</p>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -497,6 +542,7 @@ export default function PayoutSuite() {
         {activeResult?.status !== "unconfigured" && (
           <PastRuns
             branchId={activeTab}
+            branches={BRANCHES}
             key={`${activeTab}-${activeResult?.data?.payPeriod || "idle"}`}
           />
         )}
@@ -933,7 +979,7 @@ function BranchResults({
   );
 }
 
-function PastRuns({ branchId }: { branchId: string }) {
+function PastRuns({ branchId, branches }: { branchId: string; branches: BranchConfig[] }) {
   const [runs, setRuns] = useState<ParsedRun[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(false);
@@ -941,7 +987,7 @@ function PastRuns({ branchId }: { branchId: string }) {
 
   const fetchRuns = useCallback(async () => {
     setLoading(true);
-    const slug = branchSlug(branchId);
+    const slug = branchSlug(branchId, branches);
     const { data, error } = await supabase.storage
       .from("payroll")
       .list(slug, { sortBy: { column: "name", order: "desc" } });
@@ -958,7 +1004,7 @@ function PastRuns({ branchId }: { branchId: string }) {
 
     setRuns(parsed);
     setLoading(false);
-  }, [branchId]);
+  }, [branchId, branches]);
 
   useEffect(() => {
     fetchRuns();
@@ -970,7 +1016,7 @@ function PastRuns({ branchId }: { branchId: string }) {
 
   // Sort by name desc works because filenames start with ISO timestamp (run-YYYY-MM-DD...)
   const downloadRun = (run: ParsedRun) => {
-    const slug = branchSlug(branchId);
+    const slug = branchSlug(branchId, branches);
     const { data } = supabase.storage
       .from("payroll")
       .getPublicUrl(`${slug}/${run.fileName}`);

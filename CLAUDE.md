@@ -22,6 +22,7 @@ No test framework is configured.
 3. **Signed to Sealed** (`/signed-to-sealed`) — Document signature platform with PDF rendering, field placement, multi-recipient workflows, and audit trails
 4. **Payout Suite** (`/payout-suite`) — Phorest CSV → NetSuite payroll pipeline with per-branch staff config, XLSX generation, and Supabase storage
 5. **Paramount Communications** (`/paramount`) — SMS messaging portal with Twilio integration, 1:1 and bulk messaging, contact management with tags, scheduled messages, delivery tracking, broadcast history, and message search
+6. **Employee Admin** (`/employee-admin`) — Staff configuration management for payroll (names, NetSuite IDs, station leases, fees) across all WHB salon branches, backed by Supabase
 
 ## Tech Stack
 
@@ -48,6 +49,7 @@ No test framework is configured.
 /signed-to-sealed/sign     → Public signing via ?token= param
 /payout-suite              → Payroll pipeline (password gated)
 /paramount                 → SMS portal (password gated)
+/employee-admin            → Staff configuration management (password gated)
 ```
 
 ### Data Layer
@@ -58,6 +60,7 @@ Most database access is **client-side via Supabase SDK**. Each micro-app has its
 - `src/lib/timeClockHooks.ts` — Time Clock (`useEmployees`, `useJobs`, `useTimeEntries`)
 - `src/lib/signedToSealedHooks.ts` — Signed to Sealed (`useEnvelopes`, `useRecipients`, `useFields`, etc.)
 - `src/lib/paramountHooks.ts` — Paramount Communications (`useContacts`, `useMessages`, `useSendMessage`, `useBulkSend`, `useScheduledMessages`, `useBroadcastHistory`, `useMessageSearch`) with Supabase Realtime subscriptions
+- `src/lib/employeeAdminHooks.ts` — Employee Admin (`useBranches`, `useStaff`, `useNameOverrides`)
 
 **Exception — Payout Suite:** Uses a server-side API route (`src/app/api/phorest/payroll/route.ts`) that calls the Phorest API, transforms CSV data, generates XLSX, and uploads to Supabase Storage.
 
@@ -72,18 +75,18 @@ Most database access is **client-side via Supabase SDK**. Each micro-app has its
 Payout Suite key libs:
 - `src/lib/payrollTransform.ts` — Phorest CSV → per-staff payroll data
 - `src/lib/payrollExcel.ts` — XLSX generation for NetSuite import
-- `src/lib/payrollConfig.ts` — Branch/staff config with NetSuite IDs and fees
+- `src/lib/payrollConfig.ts` — Branch/staff config with NetSuite IDs and fees; `fetchBranchConfigs()` reads from `ea_*` tables at runtime
 - `src/lib/colorChargesParser.ts` — Color stylist report CSV parser
 - `src/lib/phorestClient.ts` — Phorest API client (CSV export jobs)
 - `Salon Exports/MAPPING-DOCUMENTATION.md` — Column-by-column mapping spec
 
 ### Type Definitions (`src/types/`)
 
-Separate type files per domain: `database.ts` (Brain Dump), `timeclock.ts`, `signedtosealed.ts`, `paramount.ts`. Insert/Update types are derived from main types using `Omit`.
+Separate type files per domain: `database.ts` (Brain Dump), `timeclock.ts`, `signedtosealed.ts`, `paramount.ts`, `employeeadmin.ts`. Insert/Update types are derived from main types using `Omit`.
 
 ### Component Structure
 
-Large feature components live in `src/components/`. Brain Dump and Time Clock are single-file components (`ProjectTracker.tsx`, `TimeClock.tsx`, `TimeClockAdmin.tsx`). Signed to Sealed is broken into ~13 smaller components in `src/components/signed-to-sealed/`. Paramount Communications uses 8 components in `src/components/paramount/`:
+Large feature components live in `src/components/`. Brain Dump, Time Clock, and Employee Admin are single-file components (`ProjectTracker.tsx`, `TimeClock.tsx`, `TimeClockAdmin.tsx`, `EmployeeAdmin.tsx`). Signed to Sealed is broken into ~13 smaller components in `src/components/signed-to-sealed/`. Paramount Communications uses 8 components in `src/components/paramount/`:
 - `ParamountComms.tsx` — Main orchestrator (state, view routing, keyboard shortcuts)
 - `ConversationList.tsx` — Left sidebar with contacts, search, unread badges
 - `MessageThread.tsx` — Chat bubbles, delivery status icons, character counter, schedule picker
@@ -123,8 +126,9 @@ Schema files at project root:
 - `supabase-timeclock-schema.sql` + `supabase-timeclock-jobs.sql` — Time Clock tables (`tc_employees`, `tc_time_entries`, `tc_jobs`, `tc_settings`)
 - `supabase-signedtosealed-schema.sql` — Signed to Sealed tables (`sts_envelopes`, `sts_documents`, `sts_recipients`, `sts_fields`, `sts_signatures`, `sts_audit_log`, `sts_templates`)
 - `supabase-paramount-schema.sql` — Paramount Communications tables (`pc_contacts`, `pc_messages`, `pc_broadcasts`, `pc_broadcast_recipients`, `pc_scheduled_messages`)
+- `supabase-employeeadmin-schema.sql` — Employee Admin tables (`ea_branches`, `ea_staff`, `ea_name_overrides`)
 
-Time Clock tables use `tc_` prefix. Signed to Sealed tables use `sts_` prefix. Paramount Communications tables use `pc_` prefix.
+Time Clock tables use `tc_` prefix. Signed to Sealed tables use `sts_` prefix. Paramount Communications tables use `pc_` prefix. Employee Admin tables use `ea_` prefix.
 
 ## Environment Variables
 
