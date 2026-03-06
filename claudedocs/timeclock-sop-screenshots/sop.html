@@ -1,0 +1,901 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>R Alexander Time Clock — Standard Operating Procedures</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;600;700&family=DM+Sans:wght@400;500;600;700&display=swap');
+
+  :root {
+    --gold: #d4af37;
+    --gold-light: rgba(212,175,55,0.15);
+    --gold-dark: #b8960f;
+    --green: #66bb6a;
+    --red: #ef5350;
+    --blue: #42a5f5;
+    --amber: #ffb74d;
+    --text-dark: #1a1a2e;
+    --text-mid: #4a4a5a;
+    --text-light: #7a7a8a;
+    --bg-page: #ffffff;
+    --border-light: #e8e8ee;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    color: var(--text-dark);
+    background: var(--bg-page);
+    line-height: 1.6;
+    font-size: 11pt;
+  }
+
+  .page-break { page-break-before: always; }
+  .no-break { page-break-inside: avoid; }
+
+  /* Cover Page */
+  .cover {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    background: linear-gradient(160deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+    color: #fff;
+    position: relative;
+    overflow: hidden;
+  }
+  .cover::before {
+    content: '';
+    position: absolute;
+    top: -100px;
+    right: -100px;
+    width: 500px;
+    height: 500px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(212,175,55,0.15) 0%, transparent 70%);
+  }
+  .cover::after {
+    content: '';
+    position: absolute;
+    bottom: -150px;
+    left: -150px;
+    width: 600px;
+    height: 600px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(212,175,55,0.08) 0%, transparent 70%);
+  }
+  .cover h1 {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 42pt;
+    font-weight: 300;
+    letter-spacing: 6px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+    position: relative;
+    z-index: 1;
+  }
+  .cover h1 span { color: var(--gold); }
+  .cover .subtitle {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 12pt;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin-bottom: 50px;
+    position: relative;
+    z-index: 1;
+  }
+  .cover .doc-title {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 20pt;
+    font-weight: 400;
+    color: #fff;
+    margin-bottom: 10px;
+    position: relative;
+    z-index: 1;
+  }
+  .cover .doc-meta {
+    font-size: 10pt;
+    color: rgba(255,255,255,0.5);
+    position: relative;
+    z-index: 1;
+  }
+  .cover .doc-meta span { color: rgba(255,255,255,0.7); }
+  .cover .accent-bar {
+    width: 80px;
+    height: 2px;
+    background: var(--gold);
+    margin: 25px auto;
+    position: relative;
+    z-index: 1;
+  }
+  .cover .clock-icon {
+    font-size: 64pt;
+    margin-bottom: 20px;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Section styling */
+  .content {
+    max-width: 750px;
+    margin: 0 auto;
+    padding: 50px 40px;
+  }
+
+  h2 {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 22pt;
+    font-weight: 600;
+    color: var(--text-dark);
+    margin-bottom: 6px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid var(--gold);
+    display: inline-block;
+  }
+  h2 .num {
+    color: var(--gold);
+    margin-right: 6px;
+  }
+
+  h3 {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 14pt;
+    font-weight: 600;
+    color: var(--gold-dark);
+    margin-top: 30px;
+    margin-bottom: 10px;
+  }
+
+  h4 {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 11pt;
+    font-weight: 700;
+    color: var(--text-dark);
+    margin-top: 18px;
+    margin-bottom: 6px;
+  }
+
+  p { margin-bottom: 10px; color: var(--text-mid); }
+
+  .section-intro {
+    font-size: 11pt;
+    color: var(--text-light);
+    margin-bottom: 25px;
+    margin-top: 8px;
+  }
+
+  /* Screenshot images */
+  .screenshot {
+    width: 100%;
+    border: 1px solid var(--border-light);
+    border-radius: 8px;
+    margin: 15px 0 20px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+  }
+
+  /* Callout boxes */
+  .callout {
+    border-left: 4px solid var(--gold);
+    background: var(--gold-light);
+    padding: 12px 16px;
+    border-radius: 0 6px 6px 0;
+    margin: 15px 0;
+    font-size: 10pt;
+  }
+  .callout.info {
+    border-left-color: var(--blue);
+    background: rgba(66,165,245,0.06);
+  }
+  .callout.warning {
+    border-left-color: var(--amber);
+    background: rgba(255,183,77,0.06);
+  }
+  .callout.danger {
+    border-left-color: var(--red);
+    background: rgba(239,83,80,0.06);
+  }
+  .callout strong { color: var(--text-dark); }
+
+  /* Step lists */
+  ol.steps {
+    counter-reset: step;
+    list-style: none;
+    padding: 0;
+  }
+  ol.steps > li {
+    counter-increment: step;
+    position: relative;
+    padding-left: 40px;
+    margin-bottom: 14px;
+    color: var(--text-mid);
+  }
+  ol.steps > li::before {
+    content: counter(step);
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 26px;
+    height: 26px;
+    background: var(--gold);
+    color: #fff;
+    border-radius: 50%;
+    font-size: 10pt;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'DM Sans', sans-serif;
+  }
+  ol.steps > li strong { color: var(--text-dark); }
+
+  /* Bullet lists */
+  ul.features {
+    padding-left: 20px;
+    margin-bottom: 15px;
+  }
+  ul.features li {
+    margin-bottom: 6px;
+    color: var(--text-mid);
+  }
+  ul.features li strong { color: var(--text-dark); }
+
+  /* Table of Contents */
+  .toc {
+    list-style: none;
+    padding: 0;
+  }
+  .toc li {
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border-light);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .toc li .toc-num {
+    width: 28px;
+    height: 28px;
+    background: var(--gold);
+    color: #fff;
+    border-radius: 50%;
+    font-size: 10pt;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-family: 'DM Sans', sans-serif;
+  }
+  .toc li .toc-title {
+    font-weight: 600;
+    color: var(--text-dark);
+  }
+  .toc li .toc-desc {
+    font-size: 9pt;
+    color: var(--text-light);
+    margin-left: auto;
+  }
+
+  /* Status tables */
+  .status-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 15px 0;
+    font-size: 10pt;
+  }
+  .status-table th {
+    background: var(--gold);
+    color: #fff;
+    padding: 8px 12px;
+    text-align: left;
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 700;
+    font-size: 9pt;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .status-table td {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border-light);
+    color: var(--text-mid);
+  }
+  .status-table tr:nth-child(even) td {
+    background: #fafafa;
+  }
+  .status-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 6px;
+  }
+
+  /* Footer */
+  .page-footer {
+    text-align: center;
+    padding: 30px 0;
+    border-top: 1px solid var(--border-light);
+    font-size: 8pt;
+    color: var(--text-light);
+    margin-top: 40px;
+  }
+</style>
+</head>
+<body>
+
+<!-- ==================== COVER PAGE ==================== -->
+<div class="cover">
+  <div class="clock-icon">&#128336;</div>
+  <h1>R Alexander <span>Time Clock</span></h1>
+  <div class="subtitle">Contractor Clock In / Out</div>
+  <div class="accent-bar"></div>
+  <div class="doc-title">Standard Operating Procedures</div>
+  <div class="doc-meta">
+    Version 1.0 &nbsp;|&nbsp; <span>March 2026</span> &nbsp;|&nbsp; Confidential
+  </div>
+</div>
+
+<!-- ==================== TABLE OF CONTENTS ==================== -->
+<div class="content page-break">
+  <h2>Table of Contents</h2>
+  <p class="section-intro">Complete guide to operating the R Alexander Time Clock system &mdash; for contractors and administrators.</p>
+
+  <ul class="toc">
+    <li>
+      <span class="toc-num">1</span>
+      <span class="toc-title">Overview &amp; Access</span>
+      <span class="toc-desc">What it is, how to get there</span>
+    </li>
+    <li>
+      <span class="toc-num">2</span>
+      <span class="toc-title">Clocking In</span>
+      <span class="toc-desc">PIN entry, identity confirm, job select</span>
+    </li>
+    <li>
+      <span class="toc-num">3</span>
+      <span class="toc-title">Clocking Out</span>
+      <span class="toc-desc">End your shift</span>
+    </li>
+    <li>
+      <span class="toc-num">4</span>
+      <span class="toc-title">Switching Jobs</span>
+      <span class="toc-desc">Change jobs mid-day without clocking out</span>
+    </li>
+    <li>
+      <span class="toc-num">5</span>
+      <span class="toc-title">Admin: Companies &amp; Contractors</span>
+      <span class="toc-desc">Manage organizations and workers</span>
+    </li>
+    <li>
+      <span class="toc-num">6</span>
+      <span class="toc-title">Admin: Jobs</span>
+      <span class="toc-desc">Create and manage job sites</span>
+    </li>
+    <li>
+      <span class="toc-num">7</span>
+      <span class="toc-title">Admin: Approval Queue</span>
+      <span class="toc-desc">Review, approve, and flag entries</span>
+    </li>
+    <li>
+      <span class="toc-num">8</span>
+      <span class="toc-title">Admin: Daily Log &amp; Reports</span>
+      <span class="toc-desc">Daily, weekly, and monthly reporting</span>
+    </li>
+    <li>
+      <span class="toc-num">9</span>
+      <span class="toc-title">Admin: Crew Entry</span>
+      <span class="toc-desc">Batch clock in/out for whole crews</span>
+    </li>
+    <li>
+      <span class="toc-num">10</span>
+      <span class="toc-title">Troubleshooting &amp; FAQ</span>
+      <span class="toc-desc">Common issues and solutions</span>
+    </li>
+  </ul>
+</div>
+
+<!-- ==================== SECTION 1: OVERVIEW ==================== -->
+<div class="content page-break">
+  <h2><span class="num">1.</span> Overview &amp; Access</h2>
+  <p class="section-intro">The R Alexander Time Clock is a contractor time-tracking system built into the WHB Companies Command Center. It allows workers to clock in and out of specific jobs using a simple numeric keypad, and provides administrators with reporting, approval workflows, and batch entry tools.</p>
+
+  <h3>Key Features</h3>
+  <ul class="features">
+    <li><strong>PIN-Based Clock In/Out</strong> &mdash; Workers use a 4-digit resource number on a touch-friendly keypad interface</li>
+    <li><strong>Job Assignment</strong> &mdash; Each clock-in is associated with a specific job site</li>
+    <li><strong>Job Switching</strong> &mdash; Workers can switch between jobs throughout the day without a full clock-out/clock-in cycle</li>
+    <li><strong>Approval Queue</strong> &mdash; Administrators review and approve time entries before payroll</li>
+    <li><strong>Daily / Weekly / Monthly Reports</strong> &mdash; Hours summaries with CSV export for each time period</li>
+    <li><strong>Crew Entry</strong> &mdash; Batch clock in/out entire crews for a single job and date</li>
+    <li><strong>Company Organization</strong> &mdash; Contractors and jobs are organized under companies for multi-entity tracking</li>
+    <li><strong>Stale Entry Detection</strong> &mdash; Entries open longer than 12 hours are flagged automatically</li>
+  </ul>
+
+  <h3>Accessing the Time Clock</h3>
+  <ol class="steps">
+    <li>Open the <strong>WHB Companies Command Center</strong> in your web browser.</li>
+    <li>Click the <strong>R Alexander Time Clock</strong> card on the landing page.</li>
+    <li>The time clock opens immediately &mdash; <strong>no password required</strong> for the contractor-facing clock.</li>
+  </ol>
+
+  <img src="00-landing-page.png" alt="Landing page showing R Alexander Time Clock card" class="screenshot">
+
+  <h3>Accessing the Admin Panel</h3>
+  <ol class="steps">
+    <li>From the Time Clock screen, click the <strong>Admin</strong> button in the top-right corner.</li>
+    <li>Enter the <strong>admin password</strong> when prompted.</li>
+    <li>You will be taken to the admin panel with 9 management tabs.</li>
+  </ol>
+
+  <div class="callout">
+    <strong>Note:</strong> The contractor-facing clock is designed for shared tablet use and requires no authentication. The admin panel is password-protected and intended for supervisors only.
+  </div>
+</div>
+
+<!-- ==================== SECTION 2: CLOCKING IN ==================== -->
+<div class="content page-break">
+  <h2><span class="num">2.</span> Clocking In</h2>
+  <p class="section-intro">Clocking in is a 4-step process: enter your PIN, confirm your identity, select your job, and tap Clock In.</p>
+
+  <h3>Step 1: Enter Your Resource Number</h3>
+  <p>Use the on-screen numeric keypad to enter your <strong>4-digit resource number</strong>. Your number is assigned when you are added to the system by an administrator.</p>
+
+  <img src="01-pin-entry.png" alt="PIN entry keypad screen" class="screenshot">
+
+  <h4>Keypad Controls</h4>
+  <ul class="features">
+    <li><strong>Number keys (0&ndash;9)</strong> &mdash; Enter digits of your resource number</li>
+    <li><strong>CLR</strong> (red) &mdash; Clear the entire entry and start over</li>
+    <li><strong>&larr;</strong> &mdash; Delete the last digit entered</li>
+    <li><strong>ENTER</strong> (gold) &mdash; Submit your number (enabled after 4 digits are entered)</li>
+  </ul>
+
+  <img src="02-code-entered.png" alt="4-digit code entered on keypad" class="screenshot">
+
+  <h3>Step 2: Confirm Your Identity</h3>
+  <p>After entering your number, the system displays your <strong>name</strong>, <strong>company</strong>, and <strong>resource number</strong>. Verify this is correct.</p>
+
+  <img src="03-confirm-identity.png" alt="Identity confirmation screen showing name and company" class="screenshot">
+
+  <ul class="features">
+    <li>Tap <strong style="color: #66bb6a;">Yes</strong> if the name shown is yours</li>
+    <li>Tap <strong style="color: #ef5350;">No</strong> to go back and re-enter your number</li>
+  </ul>
+
+  <h3>Step 3: Select Your Job</h3>
+  <p>Choose the job you are working on today. Only jobs assigned to your company are shown.</p>
+
+  <img src="04-select-job.png" alt="Job selection screen with available jobs" class="screenshot">
+
+  <h3>Step 4: Clock In</h3>
+  <p>After selecting a job, tap the large green <strong>CLOCK IN</strong> button to begin your shift.</p>
+
+  <img src="05-clock-in-button.png" alt="Clock In confirmation button" class="screenshot">
+
+  <p>A <strong>green success message</strong> confirms you are clocked in, including the job name. The screen automatically resets after 4 seconds.</p>
+
+  <div class="callout">
+    <strong>Tip:</strong> If no jobs are configured for your company, you will see a "Continue without job" option. Contact your admin to have jobs set up.
+  </div>
+</div>
+
+<!-- ==================== SECTION 3: CLOCKING OUT ==================== -->
+<div class="content page-break">
+  <h2><span class="num">3.</span> Clocking Out</h2>
+  <p class="section-intro">When you are done for the day, clock out using the same resource number entry process.</p>
+
+  <h3>Clock Out Process</h3>
+  <ol class="steps">
+    <li>Enter your <strong>4-digit resource number</strong> on the keypad and press <strong>Enter</strong>.</li>
+    <li>Confirm your identity by tapping <strong>Yes</strong>.</li>
+    <li>The system detects you are already clocked in and shows your <strong>current session details</strong>:
+      <ul style="margin-top: 4px;">
+        <li>Clock-in time (e.g., "12:11 AM")</li>
+        <li>Elapsed time (e.g., "0h 15m")</li>
+        <li>Current job name displayed in gold</li>
+      </ul>
+    </li>
+    <li>Tap the large red <strong>CLOCK OUT</strong> button.</li>
+  </ol>
+
+  <img src="07-clock-out-or-switch.png" alt="Action screen showing Clock Out and Switch Job buttons" class="screenshot">
+
+  <p>A <strong>green success message</strong> shows your total hours worked. The screen resets after 4 seconds.</p>
+
+  <div class="callout info">
+    <strong>Auto-Reset:</strong> If no action is taken within 30 seconds, the screen automatically returns to the keypad entry. This prevents the next worker from seeing your information.
+  </div>
+</div>
+
+<!-- ==================== SECTION 4: SWITCHING JOBS ==================== -->
+<div class="content page-break">
+  <h2><span class="num">4.</span> Switching Jobs</h2>
+  <p class="section-intro">If you need to move to a different job site during the day, use the Switch Job feature. This automatically clocks you out of your current job and clocks you into the new one in a single action.</p>
+
+  <h3>When to Use Switch Job</h3>
+  <ul class="features">
+    <li>You are <strong>already clocked in</strong> to one job and need to move to another</li>
+    <li>You want to keep an <strong>accurate record</strong> of hours per job site</li>
+    <li>This can be repeated <strong>as many times as needed</strong> throughout the day</li>
+  </ul>
+
+  <h3>How to Switch Jobs</h3>
+  <ol class="steps">
+    <li>Enter your <strong>resource number</strong> and confirm your identity (same as clocking out).</li>
+    <li>On the action screen, tap the gold <strong>SWITCH JOB</strong> button instead of Clock Out.</li>
+    <li>The system shows available jobs with the header <strong>"Switch to which job?"</strong> &mdash; your current job is automatically excluded from the list.</li>
+    <li>Tap the <strong>new job</strong> you are switching to.</li>
+  </ol>
+
+  <img src="07-clock-out-or-switch.png" alt="Action screen showing both Clock Out and Switch Job options" class="screenshot">
+
+  <img src="08-switch-job-select.png" alt="Job selection screen for switching, showing only other available jobs" class="screenshot">
+
+  <h3>What Happens Behind the Scenes</h3>
+  <ul class="features">
+    <li>The system <strong>clocks you out</strong> of your current job at the current time</li>
+    <li>The system immediately <strong>clocks you into</strong> the new job at the same time</li>
+    <li>This creates a <strong>clean pair of entries</strong> in the daily log &mdash; one closed, one new</li>
+    <li>A success message confirms: <em>"Switched from [old job] to [new job]!"</em></li>
+  </ul>
+
+  <div class="callout">
+    <strong>Note:</strong> The Switch Job button only appears when your company has <strong>more than one active job</strong>. If only one job exists, you will only see the Clock Out button.
+  </div>
+
+  <h3>Example: A Typical Multi-Job Day</h3>
+  <table class="status-table">
+    <thead>
+      <tr>
+        <th>Time</th>
+        <th>Action</th>
+        <th>Job</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>7:00 AM</td>
+        <td>Clock In</td>
+        <td>Barn</td>
+      </tr>
+      <tr>
+        <td>10:30 AM</td>
+        <td>Switch Job</td>
+        <td>Barn &rarr; Elevation Raleigh</td>
+      </tr>
+      <tr>
+        <td>1:00 PM</td>
+        <td>Switch Job</td>
+        <td>Elevation Raleigh &rarr; Barn</td>
+      </tr>
+      <tr>
+        <td>5:00 PM</td>
+        <td>Clock Out</td>
+        <td>Barn</td>
+      </tr>
+    </tbody>
+  </table>
+  <p>This creates <strong>3 time entries</strong>: Barn (7:00&ndash;10:30), Elevation Raleigh (10:30&ndash;1:00), Barn (1:00&ndash;5:00).</p>
+</div>
+
+<!-- ==================== SECTION 5: ADMIN COMPANIES & CONTRACTORS ==================== -->
+<div class="content page-break">
+  <h2><span class="num">5.</span> Admin: Companies &amp; Contractors</h2>
+  <p class="section-intro">The admin panel is organized into 9 tabs. Companies and Contractors are the foundation &mdash; set these up first before adding jobs or processing time entries.</p>
+
+  <h3>Companies Tab</h3>
+  <p>Companies are the top-level organizational unit. Each contractor and job belongs to a company.</p>
+
+  <img src="11-admin-companies.png" alt="Companies management tab" class="screenshot">
+
+  <h4>Adding a Company</h4>
+  <ol class="steps">
+    <li>Navigate to the <strong>Companies</strong> tab.</li>
+    <li>Type the company name in the <strong>"Company Name"</strong> field.</li>
+    <li>Click <strong>Add</strong> or press <strong>Enter</strong>.</li>
+  </ol>
+
+  <h4>Company Table Columns</h4>
+  <ul class="features">
+    <li><strong>Company Name</strong> &mdash; The organization name</li>
+    <li><strong>Contractors</strong> &mdash; Number of workers assigned to this company</li>
+    <li><strong>Jobs</strong> &mdash; Number of job sites assigned to this company</li>
+    <li><strong>Status</strong> &mdash; Active (green) or Inactive (gray)</li>
+    <li><strong>Actions</strong> &mdash; Activate or Deactivate the company</li>
+  </ul>
+
+  <h3>Contractors Tab</h3>
+  <p>Contractors are the workers who clock in and out. Each contractor gets a unique, auto-generated 4-digit resource number.</p>
+
+  <img src="12-admin-contractors.png" alt="Contractors management tab" class="screenshot">
+
+  <h4>Adding a Contractor</h4>
+  <ol class="steps">
+    <li>Navigate to the <strong>Contractors</strong> tab.</li>
+    <li>Select the contractor's <strong>Company</strong> from the dropdown.</li>
+    <li>Enter their <strong>First Name</strong> and <strong>Last Name</strong>.</li>
+    <li>Enter their <strong>Billable Rate</strong> (hourly rate for invoicing).</li>
+    <li>Click <strong>Add</strong>. A resource number is auto-generated (starting from 1001).</li>
+  </ol>
+
+  <h4>Contractor Table Features</h4>
+  <ul class="features">
+    <li><strong>Resource #</strong> &mdash; The 4-digit PIN used to clock in (displayed in gold)</li>
+    <li><strong>Company</strong> &mdash; Editable inline via dropdown &mdash; reassign a contractor to a different company at any time</li>
+    <li><strong>Rate</strong> &mdash; Editable inline &mdash; update the billable rate directly in the table</li>
+    <li><strong>Status</strong> &mdash; Active contractors can clock in; inactive contractors cannot</li>
+    <li><strong>Deactivate/Activate</strong> &mdash; Toggle contractor availability without deleting their records</li>
+  </ul>
+
+  <div class="callout warning">
+    <strong>Important:</strong> Deactivating a contractor prevents them from clocking in, but preserves all their historical time entries for reporting purposes. Only deactivate &mdash; never delete.
+  </div>
+</div>
+
+<!-- ==================== SECTION 6: ADMIN JOBS ==================== -->
+<div class="content page-break">
+  <h2><span class="num">6.</span> Admin: Jobs</h2>
+  <p class="section-intro">Jobs represent the specific projects or locations where contractors work. Each job is assigned to a company, and contractors only see jobs for their own company when clocking in.</p>
+
+  <img src="13-admin-jobs.png" alt="Jobs management tab" class="screenshot">
+
+  <h3>Adding a Job</h3>
+  <ol class="steps">
+    <li>Navigate to the <strong>Jobs</strong> tab.</li>
+    <li>Select the <strong>Company</strong> this job belongs to.</li>
+    <li>Enter the <strong>Job Name</strong> (e.g., "Barn", "Elevation Raleigh").</li>
+    <li>Click <strong>Add</strong> or press <strong>Enter</strong>.</li>
+  </ol>
+
+  <h3>Job Table Features</h3>
+  <ul class="features">
+    <li><strong>Name</strong> &mdash; The job/site name shown to contractors during clock-in</li>
+    <li><strong>Company</strong> &mdash; Editable inline via dropdown &mdash; reassign a job to a different company</li>
+    <li><strong>Status</strong> &mdash; Active jobs appear in the clock-in job list; inactive jobs are hidden</li>
+    <li><strong>Deactivate/Activate</strong> &mdash; Hide completed jobs without losing historical data</li>
+  </ul>
+
+  <div class="callout">
+    <strong>Best Practice:</strong> When a project is finished, <strong>deactivate</strong> the job rather than deleting it. This keeps all associated time entries intact for historical reporting while removing it from the active job list.
+  </div>
+
+  <h3>How Jobs Affect the Clock-In Flow</h3>
+  <ul class="features">
+    <li>Only <strong>active jobs assigned to the contractor's company</strong> appear during clock-in</li>
+    <li>If a company has <strong>zero active jobs</strong>, the contractor sees a "Continue without job" fallback</li>
+    <li>If a company has <strong>only one job</strong>, the Switch Job button will not appear (since there's nothing to switch to)</li>
+    <li>If a company has <strong>two or more active jobs</strong>, contractors see both Clock Out and Switch Job options</li>
+  </ul>
+</div>
+
+<!-- ==================== SECTION 7: ADMIN APPROVAL QUEUE ==================== -->
+<div class="content page-break">
+  <h2><span class="num">7.</span> Admin: Approval Queue</h2>
+  <p class="section-intro">All time entries start with a "Pending" status. The Approval Queue is where administrators review and approve entries before they go to payroll.</p>
+
+  <img src="10-admin-approval.png" alt="Approval Queue tab" class="screenshot">
+
+  <h3>Using the Approval Queue</h3>
+  <ol class="steps">
+    <li>Navigate to the <strong>Approval Queue</strong> tab (this is the default tab when opening Admin).</li>
+    <li>Select a <strong>date</strong> using the date picker. The queue defaults to yesterday's date.</li>
+    <li>Pending entries are grouped by <strong>company</strong> with a count badge showing how many need review.</li>
+    <li>For each entry, review the <strong>contractor name, job, clock-in/out times, hours, and billable amount</strong>.</li>
+    <li>Take action:
+      <ul style="margin-top: 4px;">
+        <li><strong style="color: #66bb6a;">Approve</strong> &mdash; Mark the entry as approved for payroll</li>
+        <li><strong style="color: #ffb74d;">Flag</strong> &mdash; Flag the entry for review with a required reason note</li>
+        <li><strong style="color: #66bb6a;">Approve All</strong> &mdash; Bulk-approve all entries for a company group at once</li>
+      </ul>
+    </li>
+  </ol>
+
+  <h3>Entry Information Shown</h3>
+  <table class="status-table">
+    <thead>
+      <tr>
+        <th>Column</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Resource #</strong></td>
+        <td>Contractor's 4-digit identifier</td>
+      </tr>
+      <tr>
+        <td><strong>Name</strong></td>
+        <td>Contractor's full name</td>
+      </tr>
+      <tr>
+        <td><strong>Job</strong></td>
+        <td>Job site for this entry</td>
+      </tr>
+      <tr>
+        <td><strong>Clock In / Out</strong></td>
+        <td>Start and end times; "Active" shown if still clocked in</td>
+      </tr>
+      <tr>
+        <td><strong>Hours</strong></td>
+        <td>Calculated hours to 2 decimal places</td>
+      </tr>
+      <tr>
+        <td><strong>Billable</strong></td>
+        <td>Hours &times; contractor's billable rate</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>Approval Statuses</h3>
+  <table class="status-table">
+    <thead>
+      <tr>
+        <th>Status</th>
+        <th>Color</th>
+        <th>Meaning</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Pending</strong></td>
+        <td><span class="status-dot" style="background: #42a5f5;"></span> Blue</td>
+        <td>New entry awaiting review</td>
+      </tr>
+      <tr>
+        <td><strong>Approved</strong></td>
+        <td><span class="status-dot" style="background: #66bb6a;"></span> Green</td>
+        <td>Verified and ready for payroll</td>
+      </tr>
+      <tr>
+        <td><strong>Flagged</strong></td>
+        <td><span class="status-dot" style="background: #ffb74d;"></span> Amber</td>
+        <td>Requires attention; includes a flag note</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="callout warning">
+    <strong>Flagging an Entry:</strong> When you click Flag, a modal appears requiring you to enter a reason. This note is stored with the entry and visible in the flagged entries section below the main queue.
+  </div>
+</div>
+
+<!-- ==================== SECTION 8: DAILY LOG & REPORTS ==================== -->
+<div class="content page-break">
+  <h2><span class="num">8.</span> Admin: Daily Log &amp; Reports</h2>
+  <p class="section-intro">Three reporting views provide visibility into contractor hours at different time scales. All reports support company filtering and CSV export.</p>
+
+  <h3>Daily Log</h3>
+  <p>Shows all time entries for a specific date with full detail.</p>
+
+  <img src="14-admin-daily-log.png" alt="Daily Log tab showing time entries" class="screenshot">
+
+  <h4>Daily Log Features</h4>
+  <ul class="features">
+    <li><strong>Date Picker</strong> &mdash; Select any date to view entries for that day</li>
+    <li><strong>Company Filter</strong> &mdash; Filter entries by a specific company or view all</li>
+    <li><strong>Export CSV</strong> &mdash; Download the current view as a CSV file</li>
+    <li><strong>Stale Detection</strong> &mdash; Entries open for more than 12 hours show a red <strong>"Stale (&gt;12h)"</strong> badge</li>
+    <li><strong>Set Clock Out</strong> &mdash; For active or stale entries, manually set a clock-out time</li>
+    <li><strong>Approval Status</strong> &mdash; Color-coded badges (Pending / Approved / Flagged)</li>
+  </ul>
+
+  <h3>Weekly Report</h3>
+  <p>Shows hours per contractor broken down by day of the week (Mon&ndash;Sun), with weekly totals.</p>
+
+  <img src="15-admin-weekly.png" alt="Weekly report tab showing hours grid" class="screenshot">
+
+  <h4>Weekly Report Features</h4>
+  <ul class="features">
+    <li><strong>Week Navigation</strong> &mdash; Use <strong>&larr; Prev</strong> and <strong>Next &rarr;</strong> to move between weeks</li>
+    <li><strong>Week Range Label</strong> &mdash; Shows the current week dates (e.g., "Mar 2 - Mar 8, 2026")</li>
+    <li><strong>Company Filter</strong> &mdash; Filter by company</li>
+    <li><strong>Daily Hours</strong> &mdash; Columns for Mon through Sun showing hours worked per day</li>
+    <li><strong>Weekly Total</strong> &mdash; Gold-colored total column on the right</li>
+    <li><strong>Export CSV</strong> &mdash; Download the weekly summary</li>
+  </ul>
+
+  <h3>Monthly Report</h3>
+  <p>Shows hours per contractor broken down by week number within the month, with monthly totals. Accessed via the <strong>Monthly</strong> tab. Features the same company filter and CSV export.</p>
+
+  <div class="callout">
+    <strong>CSV Exports:</strong> All three reports (Daily, Weekly, Monthly) support one-click CSV export. The exported file includes all currently visible data after any company filter is applied. Use these exports for payroll processing, invoicing, or record-keeping.
+  </div>
+</div>
+
+<!-- ==================== SECTION 9: CREW ENTRY ==================== -->
+<div class="content page-break">
+  <h2><span class="num">9.</span> Admin: Crew Entry</h2>
+  <p class="section-intro">The Crew Entry tool allows administrators to batch-create time entries for multiple workers at once &mdash; ideal for crews that all worked the same job and hours on a given day.</p>
+
+  <img src="16-admin-crew-entry.png" alt="Crew Entry batch setup interface" class="screenshot">
+
+  <h3>Using Crew Entry</h3>
+  <ol class="steps">
+    <li>Navigate to the <strong>Crew Entry</strong> tab.</li>
+    <li>Select the <strong>Company</strong> for the crew.</li>
+    <li>Select the <strong>Job</strong> they worked on (filtered by the selected company).</li>
+    <li>Set the <strong>Date</strong> (defaults to today).</li>
+    <li>Set the <strong>Clock In</strong> and <strong>Clock Out</strong> times (defaults to 7:00 AM &ndash; 5:00 PM).</li>
+    <li>A list of <strong>active contractors</strong> for the selected company appears below.</li>
+    <li>Check the boxes for each crew member who worked, or click <strong>Select All</strong> / <strong>Deselect All</strong>.</li>
+    <li>Click <strong>Submit X Entries</strong> to create all time entries at once.</li>
+  </ol>
+
+  <h3>Crew Entry Details</h3>
+  <ul class="features">
+    <li>All created entries use the <strong>same job, date, clock-in, and clock-out times</strong></li>
+    <li>Entries are created with <strong>"Pending" approval status</strong> &mdash; they still need to be approved in the Approval Queue</li>
+    <li>Selected crew members are highlighted with a <strong>gold border</strong></li>
+    <li>The Submit button shows the count of entries that will be created</li>
+    <li>A <strong>success message</strong> confirms how many entries were submitted</li>
+  </ul>
+
+  <div class="callout">
+    <strong>When to Use Crew Entry:</strong> This is ideal for situations where an entire crew worked the same shift &mdash; such as a full-day job where all workers arrived and left at the same time. For days where workers had different hours, use individual clock-in/out or manually adjust entries in the Daily Log.
+  </div>
+</div>
+
+<!-- ==================== SECTION 10: TROUBLESHOOTING ==================== -->
+<div class="content page-break">
+  <h2><span class="num">10.</span> Troubleshooting &amp; FAQ</h2>
+  <p class="section-intro">Common issues and their solutions.</p>
+
+  <h3>"Resource number not found"</h3>
+  <ul class="features">
+    <li><strong>Check the number</strong> &mdash; Ensure you entered the correct 4-digit resource number</li>
+    <li><strong>Check active status</strong> &mdash; The contractor may have been deactivated by an admin. Ask your supervisor to check the Contractors tab</li>
+    <li><strong>New contractor?</strong> &mdash; If you were just added, refresh the page to load the latest data</li>
+  </ul>
+
+  <h3>"Connecting..." Won't Go Away</h3>
+  <ul class="features">
+    <li><strong>Check internet connection</strong> &mdash; The app requires a network connection to reach the database</li>
+    <li><strong>Try refreshing</strong> &mdash; If the connection indicator persists for more than 12 seconds, a "Retry" button will appear</li>
+    <li><strong>Older browsers</strong> &mdash; Ensure you are using a modern browser (Chrome, Safari, Firefox)</li>
+  </ul>
+
+  <h3>Worker Forgot to Clock Out</h3>
+  <ul class="features">
+    <li>The entry will appear as <strong>"Active"</strong> in the Daily Log</li>
+    <li>After 12 hours, it will be marked as <strong>"Stale (&gt;12h)"</strong></li>
+    <li>An admin can click <strong>"Set Clock Out"</strong> in the Daily Log to manually set the correct clock-out time</li>
+  </ul>
+
+  <h3>Switch Job Button Not Showing</h3>
+  <ul class="features">
+    <li>The Switch Job button only appears when the contractor's company has <strong>more than one active job</strong></li>
+    <li>Check the Jobs tab to ensure multiple jobs are assigned to the contractor's company and are set to Active</li>
+  </ul>
+
+  <h3>Frequently Asked Questions</h3>
+
+  <h4>Q: Can a contractor be assigned to multiple companies?</h4>
+  <p>No, each contractor belongs to one company at a time. However, an admin can reassign a contractor to a different company via the inline dropdown on the Contractors tab.</p>
+
+  <h4>Q: What happens if I switch jobs many times in one day?</h4>
+  <p>Each switch creates a separate time entry. You can switch as many times as needed. All entries appear in the Daily Log and are counted in weekly/monthly totals.</p>
+
+  <h4>Q: Can multiple people use the time clock at the same time?</h4>
+  <p>The time clock is designed for sequential use on a shared device (one person at a time). However, the admin panel can be accessed simultaneously from any device.</p>
+
+  <h4>Q: How do I export data for payroll?</h4>
+  <p>Use the <strong>Export CSV</strong> button on any report tab (Daily, Weekly, or Monthly). Apply the company filter first if you only need data for one company. The CSV file downloads immediately.</p>
+
+  <h4>Q: Is there an overtime calculation?</h4>
+  <p>The system tracks total hours but does not automatically calculate overtime. Use the Weekly report to identify contractors exceeding 40 hours and calculate overtime during payroll processing.</p>
+
+  <h4>Q: What does the billable rate do?</h4>
+  <p>The billable rate is multiplied by hours worked to show a <strong>billable amount</strong> in the Approval Queue. This helps administrators estimate costs during the approval process.</p>
+
+  <div class="page-footer">
+    R Alexander Time Clock &mdash; Standard Operating Procedures v1.0<br>
+    &copy; 2026 WHB Companies. Confidential &amp; Proprietary.
+  </div>
+</div>
+
+</body>
+</html>
