@@ -6,6 +6,7 @@ export type RecipientStatus = 'pending' | 'viewed' | 'signed' | 'declined';
 export type FieldType = 'signature' | 'initials' | 'date_signed' | 'text' | 'checkbox' | 'dropdown';
 export type SignatureType = 'signature' | 'initials';
 export type SignatureMethod = 'draw' | 'type' | 'upload';
+export type FillMode = 'sender' | 'recipient';
 
 // ─── Envelopes ───────────────────────────────────────────
 
@@ -77,11 +78,13 @@ export interface STSField {
   height: number;
   is_required: boolean;
   dropdown_options: string[];
+  fill_mode: FillMode | null;
+  label: string | null;
   field_value: string | null;
   created_at: string;
 }
 
-export type STSFieldInsert = Omit<STSField, 'id' | 'created_at' | 'field_value'>;
+export type STSFieldInsert = Omit<STSField, 'id' | 'created_at' | 'field_value' | 'fill_mode' | 'label'> & { fill_mode?: FillMode | null; label?: string | null };
 export type STSFieldUpdate = Partial<Omit<STSField, 'id' | 'created_at'>>;
 
 // ─── Signatures ──────────────────────────────────────────
@@ -135,6 +138,44 @@ export interface STSTemplateConfig {
 export type STSTemplateInsert = Omit<STSTemplate, 'id' | 'created_at' | 'updated_at'>;
 export type STSTemplateUpdate = Partial<Omit<STSTemplate, 'id' | 'created_at'>>;
 
+// ─── Template Documents ─────────────────────────────────
+
+export interface STSTemplateDocument {
+  id: string;
+  template_id: string;
+  file_name: string;
+  file_path: string;
+  file_size: number;
+  page_count: number;
+  sort_order: number;
+  created_at: string;
+}
+
+export type STSTemplateDocumentInsert = Omit<STSTemplateDocument, 'id' | 'created_at'>;
+
+// ─── Template Fields ────────────────────────────────────
+
+export interface STSTemplateField {
+  id: string;
+  template_id: string;
+  template_document_id: string;
+  role_name: string;
+  field_type: FieldType;
+  fill_mode: FillMode;
+  label: string;
+  page_number: number;
+  x_position: number;
+  y_position: number;
+  width: number;
+  height: number;
+  is_required: boolean;
+  dropdown_options: string[];
+  created_at: string;
+}
+
+export type STSTemplateFieldInsert = Omit<STSTemplateField, 'id' | 'created_at'>;
+export type STSTemplateFieldUpdate = Partial<Omit<STSTemplateField, 'id' | 'created_at'>>;
+
 // ─── Composite Types ─────────────────────────────────────
 
 export interface STSEnvelopeDetail extends STSEnvelope {
@@ -143,7 +184,12 @@ export interface STSEnvelopeDetail extends STSEnvelope {
   fields: STSField[];
 }
 
-export type STSView = 'dashboard' | 'create' | 'detail' | 'signing' | 'templates';
+export interface STSTemplateDetail extends STSTemplate {
+  documents: STSTemplateDocument[];
+  fields: STSTemplateField[];
+}
+
+export type STSView = 'dashboard' | 'create' | 'detail' | 'signing' | 'templates' | 'template-builder';
 
 // ─── Constants ───────────────────────────────────────────
 
