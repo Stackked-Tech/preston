@@ -62,7 +62,7 @@ Most database access is **client-side via Supabase SDK**. Each micro-app has its
 
 - `src/lib/hooks.ts` — Brain Dump (`useProjects`)
 - `src/lib/timeClockHooks.ts` — Time Clock (`useEmployees`, `useJobs`, `useTimeEntries`)
-- `src/lib/signedToSealedHooks.ts` — Signed to Sealed (`useEnvelopes`, `useRecipients`, `useFields`, etc.)
+- `src/lib/signedToSealedHooks.ts` — Signed to Sealed (`useEnvelopes`, `useRecipients`, `useFields`, `useTemplates`, `useTemplateDocuments`, `useTemplateFields`, `useTemplateDetail`, etc.) + utilities (`createEnvelopeFromTemplate`, `duplicateTemplate`)
 - `src/lib/paramountHooks.ts` — Paramount Communications (`useContacts`, `useMessages`, `useSendMessage`, `useBulkSend`, `useScheduledMessages`, `useBroadcastHistory`, `useMessageSearch`) with Supabase Realtime subscriptions
 - `src/lib/employeeAdminHooks.ts` — Employee Admin (`useBranches`, `useStaff`, `useNameOverrides`)
 - `src/lib/employeeAuthHooks.ts` — Employee Portal (`useEmployeeAuth`)
@@ -92,7 +92,7 @@ Separate type files per domain: `database.ts` (Brain Dump), `timeclock.ts`, `sig
 
 ### Component Structure
 
-Large feature components live in `src/components/`. Brain Dump, Time Clock, and Employee Admin are single-file components (`ProjectTracker.tsx`, `TimeClock.tsx`, `TimeClockAdmin.tsx`, `EmployeeAdmin.tsx`). Signed to Sealed is broken into ~13 smaller components in `src/components/signed-to-sealed/`. Employee Portal has three components in `src/components/employee-portal/` (LoginPage, OnboardingPage, Dashboard). Paramount Communications uses 8 components in `src/components/paramount/`:
+Large feature components live in `src/components/`. Brain Dump, Time Clock, and Employee Admin are single-file components (`ProjectTracker.tsx`, `TimeClock.tsx`, `TimeClockAdmin.tsx`, `EmployeeAdmin.tsx`). Signed to Sealed is broken into ~18 components in `src/components/signed-to-sealed/`. Core: `SignedToSealed.tsx` (orchestrator), `Dashboard.tsx`, `EnvelopeWizard.tsx`, `EnvelopeDetail.tsx`, `DocumentViewer.tsx`, `FieldPalette.tsx`, `RecipientManager.tsx`, `SigningView.tsx`, `SignatureModal.tsx`, `AuditTrail.tsx`. Templates: `TemplateManager.tsx`, `TemplateBuilder.tsx` (3-step wizard), `TemplatePickerModal.tsx`, `RoleMappingModal.tsx`, `SaveAsTemplateModal.tsx`. Employee Portal has three components in `src/components/employee-portal/` (LoginPage, OnboardingPage, Dashboard). Paramount Communications uses 8 components in `src/components/paramount/`:
 - `ParamountComms.tsx` — Main orchestrator (state, view routing, keyboard shortcuts)
 - `ConversationList.tsx` — Left sidebar with contacts, search, unread badges
 - `MessageThread.tsx` — Chat bubbles, delivery status icons, character counter, schedule picker
@@ -112,7 +112,7 @@ No Supabase Auth for most micro-apps — RLS policies are fully permissive (desi
 
 ### File Storage
 
-Supabase Storage buckets: `attachments` (Brain Dump files), `sts-documents` (Signed to Sealed PDFs), and `payroll` (Payout Suite XLSX files).
+Supabase Storage buckets: `attachments` (Brain Dump files), `sts-documents` (Signed to Sealed PDFs — envelope docs at `{envelopeId}/`, template docs at `templates/{templateId}/`), and `payroll` (Payout Suite XLSX files).
 
 ### Paramount Communications — Twilio Integration
 
@@ -130,7 +130,8 @@ SMS is sent/received via **Twilio REST API** (direct fetch with Basic Auth, no S
 Schema files at project root:
 - `supabase-schema.sql` — Brain Dump tables (`projects`, `requirements`, `comments`, `attachments`)
 - `supabase-timeclock-schema.sql` + `supabase-timeclock-jobs.sql` — Time Clock tables (`tc_employees`, `tc_time_entries`, `tc_jobs`, `tc_settings`)
-- `supabase-signedtosealed-schema.sql` — Signed to Sealed tables (`sts_envelopes`, `sts_documents`, `sts_recipients`, `sts_fields`, `sts_signatures`, `sts_audit_log`, `sts_templates`)
+- `supabase-signedtosealed-schema.sql` — Signed to Sealed tables (`sts_envelopes`, `sts_documents`, `sts_recipients`, `sts_fields`, `sts_signatures`, `sts_audit_log`, `sts_templates`, `sts_template_documents`, `sts_template_fields`)
+- `supabase-sts-templates-migration.sql` — Migration for template documents/fields tables + fill_mode/label columns on sts_fields
 - `supabase-paramount-schema.sql` — Paramount Communications tables (`pc_contacts`, `pc_messages`, `pc_broadcasts`, `pc_broadcast_recipients`, `pc_scheduled_messages`)
 - `supabase-employeeadmin-schema.sql` — Employee Admin tables (`ea_branches`, `ea_staff`, `ea_name_overrides`)
 
@@ -151,6 +152,18 @@ CRON_SECRET=<cron-secret>                   # Paramount Communications (schedule
 ```
 
 The Supabase client (`src/lib/supabase.ts`) creates a placeholder if env vars are missing — the app builds but shows error states at runtime.
+
+## Running Supabase Migrations
+
+Supabase project ref: `sfftouuzdrxfwcqqjjpm` (Preston). Env vars in `.env` (not `.env.local`).
+psql at `/opt/homebrew/Cellar/libpq/18.3/bin/psql`. Supabase CLI v2.75 has no `db execute`.
+To run SQL against remote DB, use the Management API:
+```bash
+TOKEN=$(security find-generic-password -s "Supabase CLI" -a "supabase" -w | sed 's/go-keyring-base64://' | base64 -d)
+curl -s -X POST "https://api.supabase.com/v1/projects/sfftouuzdrxfwcqqjjpm/database/query" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d "$(jq -n --arg sql "$(cat migration.sql)" '{query: $sql}')"
+```
 
 ## Conventions
 
