@@ -14,9 +14,11 @@ import { RECIPIENT_COLORS } from "@/types/signedtosealed";
 import RecipientManager from "./RecipientManager";
 import DocumentViewer from "./DocumentViewer";
 import FieldPalette from "./FieldPalette";
+import SaveAsTemplateModal from "./SaveAsTemplateModal";
 
 interface EnvelopeWizardProps {
   envelopeId: string | null;
+  initialStep?: number;
   onComplete: (sentEnvelopeId?: string) => void;
   onCancel: () => void;
 }
@@ -39,6 +41,7 @@ export default function EnvelopeWizard({ envelopeId, onComplete, onCancel }: Env
   const [documents, setDocuments] = useState<STSDocument[]>([]);
   const [uploading, setUploading] = useState(false);
   const [sending, setSending] = useState(false);
+  const [showSaveAsTemplate, setShowSaveAsTemplate] = useState(false);
 
   // Field placement state
   const [currentPage, setCurrentPage] = useState(1);
@@ -531,6 +534,13 @@ export default function EnvelopeWizard({ envelopeId, onComplete, onCancel }: Env
               {fields.length} field{fields.length !== 1 ? "s" : ""} placed
             </span>
             <button
+              onClick={() => setShowSaveAsTemplate(true)}
+              className="text-xs px-3 py-1.5 rounded-md border transition-all hover:opacity-80"
+              style={{ borderColor: "var(--border-color)", color: "var(--text-muted)" }}
+            >
+              Save as Template
+            </button>
+            <button
               onClick={() => { saveMetadata(); setStep(3); }}
               disabled={fields.length === 0}
               className="text-xs px-4 py-2 rounded-md font-medium transition-all hover:opacity-90"
@@ -545,6 +555,17 @@ export default function EnvelopeWizard({ envelopeId, onComplete, onCancel }: Env
           </div>
         </div>
       )}
+
+      <SaveAsTemplateModal
+        isOpen={showSaveAsTemplate}
+        onClose={() => setShowSaveAsTemplate(false)}
+        recipients={recipients}
+        documents={documents}
+        fields={fields}
+        title={title}
+        message={message}
+        onSaved={() => setShowSaveAsTemplate(false)}
+      />
     </div>
   );
 }
