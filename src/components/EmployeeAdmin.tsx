@@ -7,12 +7,40 @@ import {
   useBranches,
   useStaff,
   useNameOverrides,
+  useTemplates,
+  onboardEmployee,
 } from "@/lib/employeeAdminHooks";
 import type {
+  EABranch,
   EAStaff,
   EAStaffInsert,
+  EAStaffStatus,
   EANameOverrideInsert,
+  OnboardEmployeeRequest,
 } from "@/types/employeeadmin";
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// STATUS BADGE
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const STATUS_BADGE_STYLES: Record<EAStaffStatus, { bg: string; color: string; border: string }> = {
+  active: { bg: "rgba(34,197,94,0.1)", color: "#4ade80", border: "rgba(34,197,94,0.2)" },
+  onboarding: { bg: "rgba(212,175,55,0.1)", color: "#d4af37", border: "rgba(212,175,55,0.2)" },
+  inactive: { bg: "rgba(156,163,175,0.1)", color: "#9ca3af", border: "rgba(156,163,175,0.2)" },
+  terminated: { bg: "rgba(239,68,68,0.1)", color: "#f87171", border: "rgba(239,68,68,0.2)" },
+};
+
+function StatusBadge({ status }: { status: EAStaffStatus }) {
+  const s = STATUS_BADGE_STYLES[status];
+  return (
+    <span
+      className="text-xs px-2 py-0.5 rounded-full capitalize"
+      style={{ background: s.bg, color: s.color, border: `1px solid ${s.border}` }}
+    >
+      {status}
+    </span>
+  );
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // STAFF MODAL
@@ -50,9 +78,9 @@ function StaffModal({
     supervisor: staff?.supervisor ?? "",
     sort_order: staff?.sort_order?.toString() ?? "0",
     email: staff?.email ?? "",
+    status: (staff?.status || 'active') as string,
   });
   const [saving, setSaving] = useState(false);
-  const [localActive, setLocalActive] = useState(staff?.is_active ?? true);
 
   const canSubmit =
     form.display_name.trim() !== "" &&
@@ -76,7 +104,8 @@ function StaffModal({
         supervisor: form.supervisor.trim() || null,
         email: form.email.trim() || null,
         sort_order: Number(form.sort_order) || 0,
-        is_active: localActive,
+        is_active: form.status === 'active' || form.status === 'onboarding',
+        status: form.status as EAStaffStatus,
       };
 
       if (isAdding) {
@@ -89,17 +118,6 @@ function StaffModal({
       console.error("Failed to save staff:", err);
     } finally {
       setSaving(false);
-    }
-  };
-
-  const handleToggle = async () => {
-    if (!staff) return;
-    const next = !localActive;
-    try {
-      await onToggleActive(staff.id, next);
-      setLocalActive(next);
-    } catch (err) {
-      console.error("Failed to toggle active:", err);
     }
   };
 
@@ -249,23 +267,23 @@ function StaffModal({
           </div>
         </div>
 
-        {/* Active toggle — edit mode only */}
+        {/* Status dropdown — edit mode only */}
         {!isAdding && staff && (
-          <div className="mt-4 flex items-center gap-3">
-            <button
-              className="text-sm px-3 py-1 rounded"
+          <div className="mt-4">
+            <label style={labelStyle}>Status</label>
+            <select
+              className="text-sm"
               style={{
-                background: localActive ? "rgba(220,38,38,0.15)" : "rgba(34,197,94,0.15)",
-                color: localActive ? "#f87171" : "#4ade80",
-                border: `1px solid ${localActive ? "rgba(220,38,38,0.3)" : "rgba(34,197,94,0.3)"}`,
+                ...inputStyle,
               }}
-              onClick={handleToggle}
+              value={form.status}
+              onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}
             >
-              {localActive ? "Deactivate" : "Activate"}
-            </button>
-            <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-              Currently: {localActive ? "Active" : "Inactive"}
-            </span>
+              <option value="active">Active</option>
+              <option value="onboarding">Onboarding</option>
+              <option value="inactive">Inactive</option>
+              <option value="terminated">Terminated</option>
+            </select>
           </div>
         )}
 
@@ -297,6 +315,159 @@ function StaffModal({
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// ONBOARD MODAL
+// ═══════════════════════════════════════════════════════════════════════════════
+
+interface OnboardModalProps {
+  branchId: string;
+  branches: EABranch[];
+  onSuccess: () => void;
+  onClose: () => void;
+}
+
+function OnboardModal({ branchId, branches, onSuccess, onClose }: OnboardModalProps) {
+  const { templates, loading: templatesLoading } = useTemplates();
+  const [form, setForm] = useState({
+    display_name: "",
+    email: "",
+    branch_id: branchId,
+    template_id: "",
+    target_first: "",
+    target_last: "",
+    station_lease: "",
+    financial_services: "-100",
+    phorest_fee: "-10",
+    refreshment: "-10",
+    associate_pay: "",
+    supervisor: "",
+  });
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const parts = form.display_name.trim().split(/\s+/);
+    if (parts.length >= 2) {
+      setForm((f) => ({ ...f, target_first: parts[0], target_last: parts[parts.length - 1] }));
+    } else if (parts.length === 1 && parts[0]) {
+      setForm((f) => ({ ...f, target_first: parts[0], target_last: "" }));
+    }
+  }, [form.display_name]);
+
+  const canSubmit = form.display_name.trim() !== "" && form.email.trim() !== "" && form.template_id !== "" && !submitting;
+
+  const handleSubmit = async () => {
+    if (!canSubmit) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const payload: OnboardEmployeeRequest = {
+        display_name: form.display_name.trim(),
+        email: form.email.trim(),
+        branch_id: form.branch_id,
+        template_id: form.template_id,
+        target_first: form.target_first.trim(),
+        target_last: form.target_last.trim(),
+        station_lease: Number(form.station_lease) || 0,
+        financial_services: Number(form.financial_services) || 0,
+        phorest_fee: Number(form.phorest_fee) || 0,
+        refreshment: Number(form.refreshment) || 0,
+        ...(form.associate_pay.trim() !== "" && { associate_pay: Number(form.associate_pay) }),
+        ...(form.supervisor.trim() !== "" && { supervisor: form.supervisor.trim() }),
+      };
+      await onboardEmployee(payload);
+      onSuccess();
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to onboard employee");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const inputStyle: React.CSSProperties = {
+    background: "var(--input-bg)", border: "1px solid var(--border-color)",
+    color: "var(--text-primary)", borderRadius: "0.375rem",
+    padding: "0.5rem 0.75rem", width: "100%", outline: "none",
+  };
+  const labelStyle: React.CSSProperties = {
+    color: "var(--text-secondary)", fontSize: "0.75rem",
+    fontWeight: 500, marginBottom: "0.25rem", display: "block",
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.6)" }} onClick={onClose}>
+      <div className="w-full max-w-lg rounded-lg p-6 max-h-[90vh] overflow-y-auto" style={{ background: "var(--bg-secondary)", border: "1px solid var(--border-color)" }} onClick={(e) => e.stopPropagation()}>
+        <h2 className="font-serif text-xl mb-1" style={{ color: "var(--gold)" }}>Onboard New Employee</h2>
+        <p className="text-xs mb-4" style={{ color: "var(--text-muted)" }}>Creates account, sends invite email, and assigns onboarding document</p>
+
+        {error && (
+          <div className="rounded-md p-3 mb-4 text-sm" style={{ background: "rgba(248,113,113,0.08)", color: "#f87171", border: "1px solid rgba(248,113,113,0.2)" }}>
+            {error}
+          </div>
+        )}
+
+        <div className="grid grid-cols-2 gap-3">
+          <div className="col-span-2">
+            <label style={labelStyle}>Full Name *</label>
+            <input style={inputStyle} value={form.display_name} onChange={(e) => setForm((f) => ({ ...f, display_name: e.target.value }))} placeholder="Jane Smith" />
+          </div>
+          <div className="col-span-2">
+            <label style={labelStyle}>Email *</label>
+            <input style={inputStyle} type="email" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} placeholder="jane@example.com" />
+          </div>
+          <div>
+            <label style={labelStyle}>Branch</label>
+            <select className="text-sm" style={inputStyle} value={form.branch_id} onChange={(e) => setForm((f) => ({ ...f, branch_id: e.target.value }))}>
+              {branches.map((b) => (<option key={b.branch_id} value={b.branch_id}>{b.name}</option>))}
+            </select>
+          </div>
+          <div>
+            <label style={labelStyle}>Onboarding Template *</label>
+            <select className="text-sm" style={inputStyle} value={form.template_id} onChange={(e) => setForm((f) => ({ ...f, template_id: e.target.value }))}>
+              <option value="">Select template...</option>
+              {templatesLoading ? (<option disabled>Loading...</option>) : (
+                templates.map((t) => (<option key={t.id} value={t.id}>{t.name}</option>))
+              )}
+            </select>
+          </div>
+          <div>
+            <label style={labelStyle}>Station Lease</label>
+            <input style={inputStyle} type="number" value={form.station_lease} onChange={(e) => setForm((f) => ({ ...f, station_lease: e.target.value }))} />
+          </div>
+          <div>
+            <label style={labelStyle}>Financial Services</label>
+            <input style={inputStyle} type="number" value={form.financial_services} onChange={(e) => setForm((f) => ({ ...f, financial_services: e.target.value }))} />
+          </div>
+          <div>
+            <label style={labelStyle}>Phorest Fee</label>
+            <input style={inputStyle} type="number" value={form.phorest_fee} onChange={(e) => setForm((f) => ({ ...f, phorest_fee: e.target.value }))} />
+          </div>
+          <div>
+            <label style={labelStyle}>Refreshment</label>
+            <input style={inputStyle} type="number" value={form.refreshment} onChange={(e) => setForm((f) => ({ ...f, refreshment: e.target.value }))} />
+          </div>
+          <div>
+            <label style={labelStyle}>Associate Pay</label>
+            <input style={inputStyle} type="number" placeholder="Empty = N/A" value={form.associate_pay} onChange={(e) => setForm((f) => ({ ...f, associate_pay: e.target.value }))} />
+          </div>
+          <div>
+            <label style={labelStyle}>Supervisor</label>
+            <input style={inputStyle} placeholder="Empty = N/A" value={form.supervisor} onChange={(e) => setForm((f) => ({ ...f, supervisor: e.target.value }))} />
+          </div>
+        </div>
+
+        <div className="mt-5 flex justify-end gap-3">
+          <button className="px-4 py-2 text-sm rounded" style={{ color: "var(--text-secondary)", border: "1px solid var(--border-color)" }} onClick={onClose}>Cancel</button>
+          <button className="px-4 py-2 text-sm rounded font-medium" style={{ background: canSubmit ? "var(--gold)" : "var(--input-bg)", color: canSubmit ? "#0a0b0e" : "var(--text-muted)", cursor: canSubmit ? "pointer" : "not-allowed" }} disabled={!canSubmit} onClick={handleSubmit}>
+            {submitting ? "Creating..." : "Onboard Employee"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -308,6 +479,7 @@ export default function EmployeeAdmin() {
   const [showInactive, setShowInactive] = useState(false);
   const [editingStaff, setEditingStaff] = useState<EAStaff | null>(null);
   const [isAdding, setIsAdding] = useState(false);
+  const [isOnboarding, setIsOnboarding] = useState(false);
   const [addingOverride, setAddingOverride] = useState(false);
   const [overrideForm, setOverrideForm] = useState({ phorestName: "", staffDisplayName: "" });
 
@@ -324,6 +496,7 @@ export default function EmployeeAdmin() {
     addStaff,
     updateStaff,
     toggleActive,
+    refetch,
   } = useStaff(activeBranch);
 
   const {
@@ -334,9 +507,9 @@ export default function EmployeeAdmin() {
   } = useNameOverrides(activeBranch);
 
   // Counts
-  const activeCount = staff.filter((s) => s.is_active).length;
-  const inactiveCount = staff.filter((s) => !s.is_active).length;
-  const visibleStaff = showInactive ? staff : staff.filter((s) => s.is_active);
+  const activeCount = staff.filter((s) => s.status === 'active' || s.status === 'onboarding').length;
+  const inactiveCount = staff.filter((s) => s.status === 'inactive' || s.status === 'terminated').length;
+  const visibleStaff = showInactive ? staff : staff.filter((s) => s.status === 'active' || s.status === 'onboarding');
 
   // Override handlers
   const handleAddOverride = async () => {
@@ -455,6 +628,13 @@ export default function EmployeeAdmin() {
                 <button
                   className="px-3 py-1.5 text-sm rounded font-medium"
                   style={{ background: "var(--gold)", color: "#0a0b0e" }}
+                  onClick={() => setIsOnboarding(true)}
+                >
+                  Onboard New Employee
+                </button>
+                <button
+                  className="px-3 py-1.5 text-sm rounded font-medium"
+                  style={{ background: "var(--gold)", color: "#0a0b0e" }}
                   onClick={() => setIsAdding(true)}
                 >
                   + Add Staff
@@ -470,7 +650,7 @@ export default function EmployeeAdmin() {
               <table className="w-full">
                 <thead>
                   <tr style={{ borderBottom: "1px solid var(--border-color)" }}>
-                    {["Name", "NetSuite ID", "Station Lease", "Fin. Services", "Phorest Fee", "Refreshment"].map(
+                    {["Name", "Status", "Onboarding Doc", "NetSuite ID", "Station Lease", "Fin. Services", "Phorest Fee", "Refreshment"].map(
                       (h) => (
                         <th
                           key={h}
@@ -487,7 +667,7 @@ export default function EmployeeAdmin() {
                   {visibleStaff.length === 0 ? (
                     <tr>
                       <td
-                        colSpan={6}
+                        colSpan={8}
                         className="text-center py-8 text-sm"
                         style={{ color: "var(--text-muted)" }}
                       >
@@ -524,6 +704,22 @@ export default function EmployeeAdmin() {
                             >
                               Associate
                             </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-sm">
+                          <StatusBadge status={s.status || 'active'} />
+                        </td>
+                        <td className="px-4 py-3 text-sm">
+                          {s.onboarding_envelope_id ? (
+                            <span className="text-xs px-2 py-0.5 rounded-full" style={
+                              s.status !== 'onboarding'
+                                ? { background: "rgba(34,197,94,0.1)", color: "#4ade80", border: "1px solid rgba(34,197,94,0.2)" }
+                                : { background: "rgba(212,175,55,0.1)", color: "#d4af37", border: "1px solid rgba(212,175,55,0.2)" }
+                            }>
+                              {s.status === 'onboarding' ? 'Pending' : 'Signed'}
+                            </span>
+                          ) : (
+                            <span className="text-xs" style={{ color: "var(--text-muted)" }}>&mdash;</span>
                           )}
                         </td>
                         <td className="px-4 py-3 text-sm" style={{ color: "var(--text-secondary)" }}>
@@ -718,6 +914,15 @@ export default function EmployeeAdmin() {
             setEditingStaff(null);
             setIsAdding(false);
           }}
+        />
+      )}
+
+      {isOnboarding && (
+        <OnboardModal
+          branchId={activeBranch}
+          branches={branches}
+          onSuccess={() => refetch()}
+          onClose={() => setIsOnboarding(false)}
         />
       )}
     </div>

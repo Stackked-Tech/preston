@@ -8,6 +8,17 @@ export interface EmployeeSession {
   onboardingComplete: boolean;
 }
 
+/** Full employee record for onboarding routing */
+export interface EmployeeRecord {
+  id: string;
+  branch_id: string;
+  display_name: string;
+  status: 'active' | 'onboarding' | 'inactive' | 'terminated';
+  onboarding_envelope_id: string | null;
+  onboarding_signing_token: string | null;
+  ea_branches: { name: string } | null;
+}
+
 /** Fee data for a single branch assignment */
 export interface EmployeeFeeRecord {
   id: string;

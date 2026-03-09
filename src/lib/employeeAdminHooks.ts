@@ -9,7 +9,9 @@ import type {
   EAStaffUpdate,
   EANameOverride,
   EANameOverrideInsert,
+  OnboardEmployeeRequest,
 } from "@/types/employeeadmin";
+import type { STSTemplate } from "@/types/signedtosealed";
 
 // ─── Branches ─────────────────────────────────────────────
 
@@ -186,4 +188,44 @@ export function useNameOverrides(branchId: string) {
   };
 
   return { overrides, loading, error, addOverride, deleteOverride, refetch: fetchOverrides };
+}
+
+// ─── STS Templates (for onboarding) ─────────────────────
+
+export function useTemplates() {
+  const [templates, setTemplates] = useState<STSTemplate[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured) {
+      setLoading(false);
+      return;
+    }
+    supabase
+      .from("sts_templates")
+      .select("*")
+      .order("name")
+      .then(({ data }) => {
+        setTemplates((data || []) as STSTemplate[]);
+        setLoading(false);
+      });
+  }, []);
+
+  return { templates, loading };
+}
+
+// ─── Onboard Employee ────────────────────────────────────
+
+export async function onboardEmployee(data: OnboardEmployeeRequest): Promise<EAStaff> {
+  const res = await fetch("/api/employee-admin/onboard", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const { error } = await res.json();
+    throw new Error(error || "Failed to onboard employee");
+  }
+  const { staff } = await res.json();
+  return staff as EAStaff;
 }

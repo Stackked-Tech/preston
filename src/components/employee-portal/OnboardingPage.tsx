@@ -1,32 +1,29 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useEmployeeAuth } from "@/lib/employeeAuthHooks";
+import { useEmployeeRecord } from "@/lib/employeePortalHooks";
 import Image from "next/image";
 import { useTheme } from "@/lib/theme";
 
 export default function OnboardingPage() {
-  const { user, loading, onboardingComplete, completeOnboarding } = useEmployeeAuth();
+  const { user, loading: authLoading, onboardingComplete } = useEmployeeAuth();
+  const { record, loading: recordLoading } = useEmployeeRecord(user?.email ?? undefined);
   const router = useRouter();
   const { theme } = useTheme();
-  const [completing, setCompleting] = useState(false);
 
   useEffect(() => {
-    if (!loading && !user) {
+    if (!authLoading && !user) {
       router.replace("/employee");
-    } else if (!loading && onboardingComplete) {
+    } else if (!authLoading && onboardingComplete) {
       router.replace("/employee/dashboard");
     }
-  }, [loading, user, onboardingComplete, router]);
+  }, [authLoading, user, onboardingComplete, router]);
 
-  const handleContinue = async () => {
-    setCompleting(true);
-    await completeOnboarding();
-    router.replace("/employee/dashboard");
-  };
+  const loading = authLoading || recordLoading;
 
-  if (loading || !user || onboardingComplete) {
+  if (loading || !user) {
     return (
       <div
         className="min-h-screen flex items-center justify-center"
@@ -38,6 +35,10 @@ export default function OnboardingPage() {
       </div>
     );
   }
+
+  const signingUrl = record?.onboarding_signing_token
+    ? `/signed-to-sealed/sign?token=${record.onboarding_signing_token}`
+    : null;
 
   return (
     <div
@@ -60,29 +61,40 @@ export default function OnboardingPage() {
           className="font-serif text-2xl mt-6"
           style={{ color: "var(--gold)" }}
         >
-          Welcome to The Employee Portal
+          Welcome to WHB Companies
         </h1>
         <p
           className="font-sans text-sm mt-3 leading-relaxed"
           style={{ color: "var(--text-secondary)" }}
         >
-          This is your employee portal. Here you can view your station lease,
-          fees, and other account details across all your branch assignments.
+          {record?.display_name
+            ? `Hi ${record.display_name}, before you can access your dashboard, please review and sign your onboarding document.`
+            : "Before you can access your dashboard, please review and sign your onboarding document."}
         </p>
 
-        <button
-          onClick={handleContinue}
-          disabled={completing}
-          className="mt-8 w-full py-2.5 rounded-md font-sans text-sm font-medium tracking-wide transition-opacity"
-          style={{
-            background: "var(--gold)",
-            color: "#0a0b0e",
-            opacity: completing ? 0.6 : 1,
-            cursor: completing ? "not-allowed" : "pointer",
-          }}
-        >
-          {completing ? "Setting up..." : "Continue to Dashboard"}
-        </button>
+        {record?.ea_branches?.name && (
+          <p className="font-sans text-xs mt-2" style={{ color: "var(--text-muted)" }}>
+            Branch: {record.ea_branches.name}
+          </p>
+        )}
+
+        {signingUrl ? (
+          <a
+            href={signingUrl}
+            className="mt-8 w-full py-2.5 rounded-md font-sans text-sm font-medium tracking-wide transition-opacity inline-block"
+            style={{
+              background: "var(--gold)",
+              color: "#0a0b0e",
+              textDecoration: "none",
+            }}
+          >
+            Review &amp; Sign Your Document
+          </a>
+        ) : (
+          <p className="mt-8 font-sans text-sm" style={{ color: "var(--text-muted)" }}>
+            No onboarding document assigned. Please contact your administrator.
+          </p>
+        )}
       </div>
     </div>
   );

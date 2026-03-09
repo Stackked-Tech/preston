@@ -9,21 +9,23 @@ import {
   useFields,
   useAuditLog,
 } from "@/lib/signedToSealedHooks";
-import type { STSDocument, FieldType, RecipientRole } from "@/types/signedtosealed";
+import type { STSDocument, STSField, FieldType, RecipientRole } from "@/types/signedtosealed";
 import { RECIPIENT_COLORS } from "@/types/signedtosealed";
 import RecipientManager from "./RecipientManager";
 import DocumentViewer from "./DocumentViewer";
 import FieldPalette from "./FieldPalette";
+import SaveAsTemplateModal from "./SaveAsTemplateModal";
 
 interface EnvelopeWizardProps {
   envelopeId: string | null;
+  initialStep?: number;
   onComplete: (sentEnvelopeId?: string) => void;
   onCancel: () => void;
 }
 
 const STEPS = ["Upload Documents", "Add Recipients", "Place Fields", "Review & Send"];
 
-export default function EnvelopeWizard({ envelopeId, onComplete, onCancel }: EnvelopeWizardProps) {
+export default function EnvelopeWizard({ envelopeId, initialStep, onComplete, onCancel }: EnvelopeWizardProps) {
   const { createEnvelope, updateEnvelope, sendEnvelope } = useEnvelopes();
   const { uploadDocument, updatePageCount, deleteDocument, getPublicUrl } = useDocumentUpload();
   const { logEvent } = useAuditLog(envelopeId);
@@ -33,12 +35,13 @@ export default function EnvelopeWizard({ envelopeId, onComplete, onCancel }: Env
   const { recipients, addRecipient, updateRecipient, removeRecipient, refetch: refetchRecipients } = useRecipients(activeEnvelopeId);
   const { fields, addField, updateField, removeField, refetch: refetchFields } = useFields(activeEnvelopeId);
 
-  const [step, setStep] = useState(0);
+  const [step, setStep] = useState(initialStep ?? 0);
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
   const [documents, setDocuments] = useState<STSDocument[]>([]);
   const [uploading, setUploading] = useState(false);
   const [sending, setSending] = useState(false);
+  const [showSaveAsTemplate, setShowSaveAsTemplate] = useState(false);
 
   // Field placement state
   const [currentPage, setCurrentPage] = useState(1);
@@ -159,6 +162,32 @@ export default function EnvelopeWizard({ envelopeId, onComplete, onCancel }: Env
   // Field resize handler
   const handleFieldResize = async (fieldId: string, width: number, height: number) => {
     await updateField(fieldId, { width, height });
+  };
+
+  // Sender field click handler — lets user fill sender-mode fields in step 2
+  const handleFieldClick = (field: STSField) => {
+    if (field.fill_mode === "sender") {
+      if (field.field_type === "text") {
+        const val = prompt(field.label || "Enter text:", field.field_value || "");
+        if (val !== null) updateField(field.id, { field_value: val });
+      } else if (field.field_type === "date_signed") {
+        const now = new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+        updateField(field.id, { field_value: now });
+      } else if (field.field_type === "checkbox") {
+        const current = field.field_value === "true" ? "false" : "true";
+        updateField(field.id, { field_value: current });
+      } else if (field.field_type === "dropdown") {
+        const options = field.dropdown_options || [];
+        if (options.length > 0) {
+          const val = prompt(`Select one:\n${options.map((o, i) => `${i + 1}. ${o}`).join("\n")}`, field.field_value || "");
+          if (val !== null) updateField(field.id, { field_value: val });
+        }
+      }
+      // Signature/initials sender fields: skip for now (rare use case)
+    } else {
+      // Recipient field: just select the recipient in the palette
+      setSelectedRecipientId(field.recipient_id);
+    }
   };
 
   const handlePageCountLoad = (count: number) => {
@@ -400,7 +429,7 @@ export default function EnvelopeWizard({ envelopeId, onComplete, onCancel }: Env
                   onDropField={handleDropField}
                   onFieldMove={handleFieldMove}
                   onFieldResize={handleFieldResize}
-                  onFieldClick={(f) => setSelectedRecipientId(f.recipient_id)}
+                  onFieldClick={handleFieldClick}
                   highlightRecipientId={selectedRecipientId}
                   zoom={zoom}
                 />
@@ -531,6 +560,13 @@ export default function EnvelopeWizard({ envelopeId, onComplete, onCancel }: Env
               {fields.length} field{fields.length !== 1 ? "s" : ""} placed
             </span>
             <button
+              onClick={() => setShowSaveAsTemplate(true)}
+              className="text-xs px-3 py-1.5 rounded-md border transition-all hover:opacity-80"
+              style={{ borderColor: "var(--border-color)", color: "var(--text-muted)" }}
+            >
+              Save as Template
+            </button>
+            <button
               onClick={() => { saveMetadata(); setStep(3); }}
               disabled={fields.length === 0}
               className="text-xs px-4 py-2 rounded-md font-medium transition-all hover:opacity-90"
@@ -545,6 +581,17 @@ export default function EnvelopeWizard({ envelopeId, onComplete, onCancel }: Env
           </div>
         </div>
       )}
+
+      <SaveAsTemplateModal
+        isOpen={showSaveAsTemplate}
+        onClose={() => setShowSaveAsTemplate(false)}
+        recipients={recipients}
+        documents={documents}
+        fields={fields}
+        title={title}
+        message={message}
+        onSaved={() => setShowSaveAsTemplate(false)}
+      />
     </div>
   );
 }
