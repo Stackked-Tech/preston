@@ -20,6 +20,10 @@ import type {
   STSTemplate,
   STSTemplateInsert,
   STSTemplateUpdate,
+  STSTemplateDocument,
+  STSTemplateField,
+  STSTemplateFieldInsert,
+  STSTemplateFieldUpdate,
   STSEnvelopeDetail,
   EnvelopeStatus,
 } from "@/types/signedtosealed";
@@ -477,6 +481,155 @@ export function useTemplates() {
   };
 
   return { templates, loading, refetch: fetchTemplates, createTemplate, updateTemplate, deleteTemplate };
+}
+
+// ─── Template Documents ─────────────────────────────────
+
+export function useTemplateDocuments(templateId: string | null) {
+  const [documents, setDocuments] = useState<STSTemplateDocument[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchDocuments = useCallback(async () => {
+    if (!isSupabaseConfigured || !templateId) {
+      setDocuments([]);
+      setLoading(false);
+      return;
+    }
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from("sts_template_documents")
+        .select("*")
+        .eq("template_id", templateId)
+        .order("sort_order");
+      if (error) throw toError(error);
+      setDocuments((data || []) as STSTemplateDocument[]);
+    } finally {
+      setLoading(false);
+    }
+  }, [templateId]);
+
+  useEffect(() => { fetchDocuments(); }, [fetchDocuments]);
+
+  const uploadTemplateDocument = async (file: File, sortOrder: number): Promise<STSTemplateDocument> => {
+    if (!templateId) throw new Error("No template ID");
+    const filePath = `templates/${templateId}/${Date.now()}_${file.name}`;
+    const { error: uploadError } = await supabase.storage.from("sts-documents").upload(filePath, file);
+    if (uploadError) throw toError(uploadError);
+
+    const { data, error } = await supabase
+      .from("sts_template_documents")
+      .insert({ template_id: templateId, file_name: file.name, file_path: filePath, file_size: file.size, page_count: 1, sort_order: sortOrder })
+      .select()
+      .single();
+    if (error) throw toError(error);
+    const doc = data as STSTemplateDocument;
+    setDocuments((prev) => [...prev, doc]);
+    return doc;
+  };
+
+  const updatePageCount = async (docId: string, pageCount: number) => {
+    await supabase.from("sts_template_documents").update({ page_count: pageCount }).eq("id", docId);
+    setDocuments((prev) => prev.map((d) => d.id === docId ? { ...d, page_count: pageCount } : d));
+  };
+
+  const deleteTemplateDocument = async (docId: string, filePath: string) => {
+    await supabase.storage.from("sts-documents").remove([filePath]);
+    await supabase.from("sts_template_documents").delete().eq("id", docId);
+    setDocuments((prev) => prev.filter((d) => d.id !== docId));
+  };
+
+  const getPublicUrl = (filePath: string): string => {
+    const { data } = supabase.storage.from("sts-documents").getPublicUrl(filePath);
+    return data.publicUrl;
+  };
+
+  return { documents, loading, refetch: fetchDocuments, uploadTemplateDocument, updatePageCount, deleteTemplateDocument, getPublicUrl };
+}
+
+// ─── Template Fields ────────────────────────────────────
+
+export function useTemplateFields(templateId: string | null) {
+  const [fields, setFields] = useState<STSTemplateField[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchFields = useCallback(async () => {
+    if (!isSupabaseConfigured || !templateId) {
+      setFields([]);
+      setLoading(false);
+      return;
+    }
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from("sts_template_fields")
+        .select("*")
+        .eq("template_id", templateId);
+      if (error) throw toError(error);
+      setFields((data || []) as STSTemplateField[]);
+    } finally {
+      setLoading(false);
+    }
+  }, [templateId]);
+
+  useEffect(() => { fetchFields(); }, [fetchFields]);
+
+  const addTemplateField = async (insert: STSTemplateFieldInsert): Promise<STSTemplateField> => {
+    const { data, error } = await supabase
+      .from("sts_template_fields")
+      .insert(insert)
+      .select()
+      .single();
+    if (error) throw toError(error);
+    const field = data as STSTemplateField;
+    setFields((prev) => [...prev, field]);
+    return field;
+  };
+
+  const updateTemplateField = async (id: string, updates: STSTemplateFieldUpdate) => {
+    const { error } = await supabase.from("sts_template_fields").update(updates).eq("id", id);
+    if (error) throw toError(error);
+    setFields((prev) => prev.map((f) => f.id === id ? { ...f, ...updates } : f));
+  };
+
+  const removeTemplateField = async (id: string) => {
+    const { error } = await supabase.from("sts_template_fields").delete().eq("id", id);
+    if (error) throw toError(error);
+    setFields((prev) => prev.filter((f) => f.id !== id));
+  };
+
+  return { fields, loading, refetch: fetchFields, addTemplateField, updateTemplateField, removeTemplateField };
+}
+
+// ─── Template Detail ────────────────────────────────────
+
+export function useTemplateDetail(templateId: string | null) {
+  const [template, setTemplate] = useState<STSTemplate | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const fetchDetail = useCallback(async () => {
+    if (!isSupabaseConfigured || !templateId) {
+      setTemplate(null);
+      setLoading(false);
+      return;
+    }
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from("sts_templates")
+        .select("*")
+        .eq("id", templateId)
+        .single();
+      if (error) throw toError(error);
+      setTemplate(data as STSTemplate);
+    } finally {
+      setLoading(false);
+    }
+  }, [templateId]);
+
+  useEffect(() => { fetchDetail(); }, [fetchDetail]);
+
+  return { template, loading, refetch: fetchDetail };
 }
 
 // ─── Signing by Token ────────────────────────────────────
