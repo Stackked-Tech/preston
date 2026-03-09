@@ -25,7 +25,7 @@ interface EnvelopeWizardProps {
 
 const STEPS = ["Upload Documents", "Add Recipients", "Place Fields", "Review & Send"];
 
-export default function EnvelopeWizard({ envelopeId, onComplete, onCancel }: EnvelopeWizardProps) {
+export default function EnvelopeWizard({ envelopeId, initialStep, onComplete, onCancel }: EnvelopeWizardProps) {
   const { createEnvelope, updateEnvelope, sendEnvelope } = useEnvelopes();
   const { uploadDocument, updatePageCount, deleteDocument, getPublicUrl } = useDocumentUpload();
   const { logEvent } = useAuditLog(envelopeId);
@@ -35,7 +35,7 @@ export default function EnvelopeWizard({ envelopeId, onComplete, onCancel }: Env
   const { recipients, addRecipient, updateRecipient, removeRecipient, refetch: refetchRecipients } = useRecipients(activeEnvelopeId);
   const { fields, addField, updateField, removeField, refetch: refetchFields } = useFields(activeEnvelopeId);
 
-  const [step, setStep] = useState(0);
+  const [step, setStep] = useState(initialStep ?? 0);
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
   const [documents, setDocuments] = useState<STSDocument[]>([]);

@@ -9,6 +9,8 @@ import EnvelopeWizard from "./EnvelopeWizard";
 import EnvelopeDetail from "./EnvelopeDetail";
 import TemplateManager from "./TemplateManager";
 import TemplateBuilder from "./TemplateBuilder";
+import TemplatePickerModal from "./TemplatePickerModal";
+import RoleMappingModal from "./RoleMappingModal";
 
 export default function SignedToSealed() {
   const { theme, toggleTheme } = useTheme();
@@ -16,10 +18,13 @@ export default function SignedToSealed() {
   const [view, setView] = useState<STSView>("dashboard");
   const [selectedEnvelopeId, setSelectedEnvelopeId] = useState<string | null>(null);
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
+  const [showTemplatePicker, setShowTemplatePicker] = useState(false);
+  const [showRoleMapping, setShowRoleMapping] = useState(false);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+  const [wizardInitialStep, setWizardInitialStep] = useState(0);
 
   const handleCreateNew = useCallback(() => {
-    setSelectedEnvelopeId(null);
-    setView("create");
+    setShowTemplatePicker(true);
   }, []);
 
   const handleOpenEnvelope = useCallback((id: string) => {
@@ -34,6 +39,7 @@ export default function SignedToSealed() {
 
   const handleBackToDashboard = useCallback(() => {
     setSelectedEnvelopeId(null);
+    setWizardInitialStep(0);
     setView("dashboard");
     envelopesHook.refetch();
   }, [envelopesHook]);
@@ -53,10 +59,32 @@ export default function SignedToSealed() {
     setView("templates");
   }, []);
 
-  const handleUseTemplate = useCallback((templateId: string) => {
-    // For now, just log — Task 7 will implement the full flow
-    console.log("Use template:", templateId);
+  const handleBlankEnvelope = useCallback(() => {
+    setShowTemplatePicker(false);
+    setSelectedEnvelopeId(null);
+    setWizardInitialStep(0);
+    setView("create");
   }, []);
+
+  const handleSelectTemplate = useCallback((templateId: string) => {
+    setShowTemplatePicker(false);
+    setSelectedTemplateId(templateId);
+    setShowRoleMapping(true);
+  }, []);
+
+  const handleUseTemplate = useCallback((templateId: string) => {
+    setSelectedTemplateId(templateId);
+    setShowRoleMapping(true);
+  }, []);
+
+  const handleEnvelopeFromTemplate = useCallback((envelopeId: string) => {
+    setShowRoleMapping(false);
+    setSelectedTemplateId(null);
+    setSelectedEnvelopeId(envelopeId);
+    setWizardInitialStep(2); // Open at field placement step
+    setView("create");
+    envelopesHook.refetch();
+  }, [envelopesHook]);
 
   const handleWizardComplete = useCallback((sentEnvelopeId?: string) => {
     if (sentEnvelopeId) {
@@ -144,6 +172,7 @@ export default function SignedToSealed() {
         {view === "create" && (
           <EnvelopeWizard
             envelopeId={selectedEnvelopeId}
+            initialStep={wizardInitialStep}
             onComplete={handleWizardComplete}
             onCancel={handleBackToDashboard}
           />
@@ -171,6 +200,22 @@ export default function SignedToSealed() {
           />
         )}
       </main>
+
+      {/* Modals */}
+      <TemplatePickerModal
+        isOpen={showTemplatePicker}
+        onClose={() => setShowTemplatePicker(false)}
+        onBlankEnvelope={handleBlankEnvelope}
+        onSelectTemplate={handleSelectTemplate}
+      />
+      {selectedTemplateId && (
+        <RoleMappingModal
+          isOpen={showRoleMapping}
+          templateId={selectedTemplateId}
+          onClose={() => { setShowRoleMapping(false); setSelectedTemplateId(null); }}
+          onCreated={handleEnvelopeFromTemplate}
+        />
+      )}
     </div>
   );
 }

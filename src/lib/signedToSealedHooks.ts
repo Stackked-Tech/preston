@@ -26,7 +26,9 @@ import type {
   STSTemplateFieldUpdate,
   STSEnvelopeDetail,
   EnvelopeStatus,
+  RecipientRole,
 } from "@/types/signedtosealed";
+import { RECIPIENT_COLORS } from "@/types/signedtosealed";
 
 // Helper to convert Supabase error objects to proper Error instances
 function toError(err: unknown): Error {
@@ -630,6 +632,100 @@ export function useTemplateDetail(templateId: string | null) {
   useEffect(() => { fetchDetail(); }, [fetchDetail]);
 
   return { template, loading, refetch: fetchDetail };
+}
+
+// ─── Create Envelope from Template ──────────────────────
+
+export async function createEnvelopeFromTemplate(
+  template: STSTemplate,
+  templateDocuments: STSTemplateDocument[],
+  templateFields: STSTemplateField[],
+  roleMappings: { roleName: string; name: string; email: string; role: RecipientRole; signing_order: number }[]
+): Promise<string> {
+  // 1. Create envelope
+  const { data: env, error: envError } = await supabase
+    .from("sts_envelopes")
+    .insert({
+      title: template.envelope_config.title || template.name,
+      message: template.envelope_config.message || "",
+      status: "draft",
+      created_by: "",
+    })
+    .select()
+    .single();
+  if (envError) throw toError(envError);
+
+  // 2. Copy documents (copy storage files, create sts_documents records)
+  const docIdMap: Record<string, string> = {};
+  for (const templateDoc of templateDocuments) {
+    const newPath = `${env.id}/${Date.now()}_${templateDoc.file_name}`;
+    const { error: copyError } = await supabase.storage
+      .from("sts-documents")
+      .copy(templateDoc.file_path, newPath);
+    if (copyError) throw toError(copyError);
+
+    const { data: newDoc, error: docError } = await supabase
+      .from("sts_documents")
+      .insert({
+        envelope_id: env.id,
+        file_name: templateDoc.file_name,
+        file_path: newPath,
+        file_size: templateDoc.file_size,
+        page_count: templateDoc.page_count,
+        sort_order: templateDoc.sort_order,
+      })
+      .select()
+      .single();
+    if (docError) throw toError(docError);
+    docIdMap[templateDoc.id] = newDoc.id;
+  }
+
+  // 3. Create recipients from mappings
+  const roleToRecipientId: Record<string, string> = {};
+  for (let i = 0; i < roleMappings.length; i++) {
+    const mapping = roleMappings[i];
+    const { data: recip, error: recipError } = await supabase
+      .from("sts_recipients")
+      .insert({
+        envelope_id: env.id,
+        name: mapping.name,
+        email: mapping.email,
+        role: mapping.role,
+        signing_order: mapping.signing_order,
+        status: "pending",
+        color_hex: RECIPIENT_COLORS[i % RECIPIENT_COLORS.length],
+      })
+      .select()
+      .single();
+    if (recipError) throw toError(recipError);
+    roleToRecipientId[mapping.roleName] = recip.id;
+  }
+
+  // 4. Clone template fields → envelope fields
+  for (const tf of templateFields) {
+    const newDocId = docIdMap[tf.template_document_id];
+    const recipientId = roleToRecipientId[tf.role_name];
+    if (!newDocId || !recipientId) continue;
+
+    const { error: fieldError } = await supabase.from("sts_fields").insert({
+      envelope_id: env.id,
+      document_id: newDocId,
+      recipient_id: recipientId,
+      field_type: tf.field_type,
+      fill_mode: tf.fill_mode,
+      label: tf.label,
+      page_number: tf.page_number,
+      x_position: tf.x_position,
+      y_position: tf.y_position,
+      width: tf.width,
+      height: tf.height,
+      is_required: tf.is_required,
+      dropdown_options: tf.dropdown_options,
+    });
+    if (fieldError) throw toError(fieldError);
+  }
+
+  return env.id;
 }
 
 // ─── Signing by Token ────────────────────────────────────
