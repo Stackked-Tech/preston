@@ -8,12 +8,14 @@ import Dashboard from "./Dashboard";
 import EnvelopeWizard from "./EnvelopeWizard";
 import EnvelopeDetail from "./EnvelopeDetail";
 import TemplateManager from "./TemplateManager";
+import TemplateBuilder from "./TemplateBuilder";
 
 export default function SignedToSealed() {
   const { theme, toggleTheme } = useTheme();
   const envelopesHook = useEnvelopes();
   const [view, setView] = useState<STSView>("dashboard");
   const [selectedEnvelopeId, setSelectedEnvelopeId] = useState<string | null>(null);
+  const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
 
   const handleCreateNew = useCallback(() => {
     setSelectedEnvelopeId(null);
@@ -35,6 +37,26 @@ export default function SignedToSealed() {
     setView("dashboard");
     envelopesHook.refetch();
   }, [envelopesHook]);
+
+  const handleNewTemplate = useCallback(() => {
+    setEditingTemplateId(null);
+    setView("template-builder");
+  }, []);
+
+  const handleEditTemplate = useCallback((id: string) => {
+    setEditingTemplateId(id);
+    setView("template-builder");
+  }, []);
+
+  const handleTemplateBuilderComplete = useCallback(() => {
+    setEditingTemplateId(null);
+    setView("templates");
+  }, []);
+
+  const handleUseTemplate = useCallback((templateId: string) => {
+    // For now, just log — Task 7 will implement the full flow
+    console.log("Use template:", templateId);
+  }, []);
 
   const handleWizardComplete = useCallback((sentEnvelopeId?: string) => {
     if (sentEnvelopeId) {
@@ -134,7 +156,19 @@ export default function SignedToSealed() {
           />
         )}
         {view === "templates" && (
-          <TemplateManager onBack={handleBackToDashboard} />
+          <TemplateManager
+            onBack={handleBackToDashboard}
+            onNewTemplate={handleNewTemplate}
+            onEditTemplate={handleEditTemplate}
+            onUseTemplate={handleUseTemplate}
+          />
+        )}
+        {view === "template-builder" && (
+          <TemplateBuilder
+            templateId={editingTemplateId}
+            onComplete={handleTemplateBuilderComplete}
+            onCancel={handleTemplateBuilderComplete}
+          />
         )}
       </main>
     </div>
