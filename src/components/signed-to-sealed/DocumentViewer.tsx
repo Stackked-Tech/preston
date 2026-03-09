@@ -209,11 +209,14 @@ export default function DocumentViewer({
           {/* Field Overlays */}
           {pageFields.map((field) => {
             const r = getRecipient(field.recipient_id);
-            const color = r?.color_hex || "#6b7280";
+            const recipientColor = r?.color_hex || "#6b7280";
+            const isSenderField = field.fill_mode === "sender";
+            const color = isSenderField ? "#d4af37" : recipientColor;
             const isHighlighted = !highlightRecipientId || field.recipient_id === highlightRecipientId;
             const isFilled = !!field.field_value;
             const isSignatureType = field.field_type === "signature" || field.field_type === "initials";
             const isCheckbox = field.field_type === "checkbox";
+            const displayLabel = isSenderField && field.label ? field.label : FIELD_TYPE_LABELS[field.field_type];
 
             return (
               <div
@@ -224,10 +227,12 @@ export default function DocumentViewer({
                   top: `${field.y_position}%`,
                   width: `${field.width}%`,
                   height: `${field.height}%`,
-                  borderColor: isFilled ? color : color,
+                  borderColor: color,
                   borderWidth: 2,
-                  borderStyle: isFilled ? "solid" : "dashed",
-                  background: isFilled ? (isSignatureType ? "#ffffff" : color + "10") : color + "15",
+                  borderStyle: isSenderField || isFilled ? "solid" : "dashed",
+                  background: isSenderField
+                    ? (isFilled && isSignatureType ? "#ffffff" : "rgba(212, 175, 55, 0.1)")
+                    : (isFilled ? (isSignatureType ? "#ffffff" : recipientColor + "10") : recipientColor + "15"),
                   opacity: isHighlighted ? 1 : 0.3,
                   cursor: readOnly ? "pointer" : "move",
                   zIndex: draggingFieldId === field.id ? 50 : 10,
@@ -261,7 +266,7 @@ export default function DocumentViewer({
                 {/* Unfilled — show field type label */}
                 {!isFilled && (
                   <span className="text-[9px] font-medium pointer-events-none select-none" style={{ color }}>
-                    {FIELD_TYPE_LABELS[field.field_type]}
+                    {displayLabel}
                   </span>
                 )}
 
