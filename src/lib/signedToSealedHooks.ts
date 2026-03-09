@@ -761,8 +761,9 @@ export async function duplicateTemplate(templateId: string): Promise<STSTemplate
   const docIdMap: Record<string, string> = {};
   for (const doc of (docs || [])) {
     const newPath = `templates/${(newTemplate as STSTemplate).id}/${Date.now()}_${doc.file_name}`;
-    await supabase.storage.from("sts-documents").copy(doc.file_path, newPath);
-    const { data: newDoc } = await supabase
+    const { error: copyError } = await supabase.storage.from("sts-documents").copy(doc.file_path, newPath);
+    if (copyError) throw toError(copyError);
+    const { data: newDoc, error: newDocError } = await supabase
       .from("sts_template_documents")
       .insert({
         template_id: (newTemplate as STSTemplate).id,
@@ -774,6 +775,7 @@ export async function duplicateTemplate(templateId: string): Promise<STSTemplate
       })
       .select()
       .single();
+    if (newDocError) throw toError(newDocError);
     if (newDoc) docIdMap[doc.id] = newDoc.id;
   }
 
@@ -786,7 +788,7 @@ export async function duplicateTemplate(templateId: string): Promise<STSTemplate
   for (const field of (fields || [])) {
     const newDocId = docIdMap[field.template_document_id];
     if (!newDocId) continue;
-    await supabase.from("sts_template_fields").insert({
+    const { error: fieldError } = await supabase.from("sts_template_fields").insert({
       template_id: (newTemplate as STSTemplate).id,
       template_document_id: newDocId,
       role_name: field.role_name,
@@ -801,6 +803,7 @@ export async function duplicateTemplate(templateId: string): Promise<STSTemplate
       is_required: field.is_required,
       dropdown_options: field.dropdown_options,
     });
+    if (fieldError) throw toError(fieldError);
   }
 
   return newTemplate as STSTemplate;

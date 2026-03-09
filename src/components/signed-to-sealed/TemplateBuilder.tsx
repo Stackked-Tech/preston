@@ -18,6 +18,7 @@ import type {
   FillMode,
 } from "@/types/signedtosealed";
 import { RECIPIENT_COLORS } from "@/types/signedtosealed";
+import { supabase } from "@/lib/supabase";
 import DocumentViewer from "./DocumentViewer";
 import FieldPalette from "./FieldPalette";
 
@@ -67,6 +68,10 @@ export default function TemplateBuilder({ templateId, onComplete, onCancel }: Te
   const [editRoleName, setEditRoleName] = useState("");
   const [editRoleType, setEditRoleType] = useState<RecipientRole>("signer");
 
+  // Track auto-created templates for cleanup on cancel
+  const wasAutoCreated = useRef(false);
+  const creatingRef = useRef(false);
+
   // Sync from loaded template — only on first load
   const initialSynced = useRef(false);
   useEffect(() => {
@@ -82,7 +87,8 @@ export default function TemplateBuilder({ templateId, onComplete, onCancel }: Te
 
   // Auto-create template on mount if new
   useEffect(() => {
-    if (!activeTemplateId) {
+    if (!activeTemplateId && !creatingRef.current) {
+      creatingRef.current = true;
       createTemplate({
         name: "Untitled Template",
         description: "",
@@ -90,9 +96,10 @@ export default function TemplateBuilder({ templateId, onComplete, onCancel }: Te
       })
         .then((t) => {
           setActiveTemplateId(t.id);
+          wasAutoCreated.current = true;
         })
         .catch(() => {
-          // Table may not exist yet
+          creatingRef.current = false;
         });
     }
   }, [activeTemplateId, createTemplate]);
@@ -110,6 +117,18 @@ export default function TemplateBuilder({ templateId, onComplete, onCancel }: Te
       },
     });
   }, [activeTemplateId, name, description, defaultTitle, defaultMessage, roles, updateTemplate]);
+
+  // Cancel handler — cleans up auto-created template if user never did meaningful work
+  const handleCancel = async () => {
+    if (wasAutoCreated.current && activeTemplateId) {
+      // Delete any uploaded docs from storage first
+      for (const doc of documents) {
+        await supabase.storage.from("sts-documents").remove([doc.file_path]);
+      }
+      await supabase.from("sts_templates").delete().eq("id", activeTemplateId);
+    }
+    onCancel();
+  };
 
   // Handle file upload
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -316,7 +335,7 @@ export default function TemplateBuilder({ templateId, onComplete, onCancel }: Te
         ))}
         <div className="flex-1" />
         <button
-          onClick={onCancel}
+          onClick={handleCancel}
           className="text-xs px-3 py-1.5 rounded-md border transition-all hover:opacity-80"
           style={{ borderColor: "var(--border-color)", color: "var(--text-muted)" }}
         >
@@ -648,8 +667,9 @@ export default function TemplateBuilder({ templateId, onComplete, onCancel }: Te
                         <div className="w-px h-4 mx-1" style={{ background: "var(--border-color)" }} />
                         <input
                           type="text"
-                          value={editingField.label}
-                          onChange={(e) => handleLabelChange(editingField.id, e.target.value)}
+                          defaultValue={editingField.label}
+                          key={editingField.id}
+                          onBlur={(e) => handleLabelChange(editingField.id, e.target.value)}
                           placeholder="Label for sender..."
                           className="text-[10px] px-2 py-0.5 rounded border outline-none w-40"
                           style={{ background: "var(--input-bg)", borderColor: "var(--border-color)", color: "var(--text-primary)" }}
@@ -698,7 +718,7 @@ export default function TemplateBuilder({ templateId, onComplete, onCancel }: Te
           style={{ borderColor: "var(--border-color)", background: "var(--bg-secondary)" }}
         >
           <button
-            onClick={() => { if (step > 0) setStep(step - 1); else onCancel(); }}
+            onClick={() => { if (step > 0) setStep(step - 1); else handleCancel(); }}
             className="text-xs px-4 py-2 rounded-md border transition-all hover:opacity-80"
             style={{ borderColor: "var(--border-color)", color: "var(--text-muted)" }}
           >
