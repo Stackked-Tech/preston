@@ -7,7 +7,7 @@ import Image from "next/image";
 import { useTheme } from "@/lib/theme";
 
 export default function LoginPage() {
-  const { user, loading, onboardingComplete, login } = useEmployeeAuth();
+  const { user, loading, needsOnboarding, login } = useEmployeeAuth();
   const router = useRouter();
   const { theme } = useTheme();
   const [email, setEmail] = useState("");
@@ -18,9 +18,13 @@ export default function LoginPage() {
   // Redirect if already authenticated
   useEffect(() => {
     if (!loading && user) {
-      router.replace(onboardingComplete ? "/employee/dashboard" : "/employee/onboarding");
+      if (needsOnboarding) {
+        router.replace("/employee/onboarding");
+      } else {
+        router.replace("/employee/dashboard");
+      }
     }
-  }, [loading, user, onboardingComplete, router]);
+  }, [loading, user, needsOnboarding, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
