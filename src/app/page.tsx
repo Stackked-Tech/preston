@@ -54,13 +54,6 @@ const microApps = [
     icon: "👥",
     color: "#6366f1",
   },
-  {
-    name: "Employee Portal",
-    description: "Staff login for fee summaries & account info",
-    href: "/employee",
-    icon: "🔑",
-    color: "#0ea5e9",
-  },
 ];
 
 export default function Home() {
