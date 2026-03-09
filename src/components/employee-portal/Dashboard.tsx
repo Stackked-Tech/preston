@@ -3,13 +3,14 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useEmployeeAuth } from "@/lib/employeeAuthHooks";
-import { useEmployeeFees } from "@/lib/employeePortalHooks";
+import { useEmployeeFees, useEmployeeRecord } from "@/lib/employeePortalHooks";
 import Image from "next/image";
 import { useTheme } from "@/lib/theme";
 
 export default function Dashboard() {
   const { user, loading: authLoading, logout } = useEmployeeAuth();
   const { fees, loading: feesLoading, error } = useEmployeeFees(user?.email ?? undefined);
+  const { record } = useEmployeeRecord(user?.email ?? undefined);
   const router = useRouter();
   const { theme } = useTheme();
 
@@ -84,6 +85,61 @@ export default function Dashboard() {
         >
           Your Fee Summary
         </h2>
+
+        {record?.onboarding_envelope_id && (
+          <div
+            className="rounded-lg border p-5 mb-6"
+            style={{ background: "var(--card-bg)", borderColor: "var(--border-light)" }}
+          >
+            <h3
+              className="font-serif text-base mb-3"
+              style={{ color: "var(--text-primary)" }}
+            >
+              Onboarding Documents
+            </h3>
+            <div className="flex items-center justify-between">
+              <span className="font-sans text-sm" style={{ color: "var(--text-secondary)" }}>
+                Onboarding Agreement
+              </span>
+              <div className="flex items-center gap-3">
+                {record.status === "onboarding" ? (
+                  <>
+                    <span
+                      className="text-xs px-2 py-0.5 rounded-full"
+                      style={{
+                        background: "rgba(212,175,55,0.1)",
+                        color: "#d4af37",
+                        border: "1px solid rgba(212,175,55,0.2)",
+                      }}
+                    >
+                      Pending Signature
+                    </span>
+                    {record.onboarding_signing_token && (
+                      <a
+                        href={`/signed-to-sealed/sign?token=${record.onboarding_signing_token}`}
+                        className="text-xs font-medium"
+                        style={{ color: "var(--gold)" }}
+                      >
+                        Sign Now
+                      </a>
+                    )}
+                  </>
+                ) : (
+                  <span
+                    className="text-xs px-2 py-0.5 rounded-full"
+                    style={{
+                      background: "rgba(34,197,94,0.1)",
+                      color: "#4ade80",
+                      border: "1px solid rgba(34,197,94,0.2)",
+                    }}
+                  >
+                    Signed
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {error && (
           <div
