@@ -9,7 +9,7 @@ import {
   useFields,
   useAuditLog,
 } from "@/lib/signedToSealedHooks";
-import type { STSDocument, FieldType, RecipientRole } from "@/types/signedtosealed";
+import type { STSDocument, STSField, FieldType, RecipientRole } from "@/types/signedtosealed";
 import { RECIPIENT_COLORS } from "@/types/signedtosealed";
 import RecipientManager from "./RecipientManager";
 import DocumentViewer from "./DocumentViewer";
@@ -162,6 +162,32 @@ export default function EnvelopeWizard({ envelopeId, initialStep, onComplete, on
   // Field resize handler
   const handleFieldResize = async (fieldId: string, width: number, height: number) => {
     await updateField(fieldId, { width, height });
+  };
+
+  // Sender field click handler — lets user fill sender-mode fields in step 2
+  const handleFieldClick = (field: STSField) => {
+    if (field.fill_mode === "sender") {
+      if (field.field_type === "text") {
+        const val = prompt(field.label || "Enter text:", field.field_value || "");
+        if (val !== null) updateField(field.id, { field_value: val });
+      } else if (field.field_type === "date_signed") {
+        const now = new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+        updateField(field.id, { field_value: now });
+      } else if (field.field_type === "checkbox") {
+        const current = field.field_value === "true" ? "false" : "true";
+        updateField(field.id, { field_value: current });
+      } else if (field.field_type === "dropdown") {
+        const options = field.dropdown_options || [];
+        if (options.length > 0) {
+          const val = prompt(`Select one:\n${options.map((o, i) => `${i + 1}. ${o}`).join("\n")}`, field.field_value || "");
+          if (val !== null) updateField(field.id, { field_value: val });
+        }
+      }
+      // Signature/initials sender fields: skip for now (rare use case)
+    } else {
+      // Recipient field: just select the recipient in the palette
+      setSelectedRecipientId(field.recipient_id);
+    }
   };
 
   const handlePageCountLoad = (count: number) => {
@@ -403,7 +429,7 @@ export default function EnvelopeWizard({ envelopeId, initialStep, onComplete, on
                   onDropField={handleDropField}
                   onFieldMove={handleFieldMove}
                   onFieldResize={handleFieldResize}
-                  onFieldClick={(f) => setSelectedRecipientId(f.recipient_id)}
+                  onFieldClick={handleFieldClick}
                   highlightRecipientId={selectedRecipientId}
                   zoom={zoom}
                 />
