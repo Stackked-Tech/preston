@@ -728,6 +728,84 @@ export async function createEnvelopeFromTemplate(
   return env.id;
 }
 
+// ─── Duplicate Template ─────────────────────────────────
+
+export async function duplicateTemplate(templateId: string): Promise<STSTemplate> {
+  // 1. Fetch template
+  const { data: template, error: tErr } = await supabase
+    .from("sts_templates")
+    .select("*")
+    .eq("id", templateId)
+    .single();
+  if (tErr || !template) throw toError(tErr || new Error("Template not found"));
+
+  // 2. Create copy
+  const { data: newTemplate, error: ntErr } = await supabase
+    .from("sts_templates")
+    .insert({
+      name: `${(template as STSTemplate).name} (Copy)`,
+      description: (template as STSTemplate).description,
+      envelope_config: (template as STSTemplate).envelope_config,
+    })
+    .select()
+    .single();
+  if (ntErr || !newTemplate) throw toError(ntErr || new Error("Failed to create template copy"));
+
+  // 3. Copy documents
+  const { data: docs } = await supabase
+    .from("sts_template_documents")
+    .select("*")
+    .eq("template_id", templateId)
+    .order("sort_order");
+
+  const docIdMap: Record<string, string> = {};
+  for (const doc of (docs || [])) {
+    const newPath = `templates/${(newTemplate as STSTemplate).id}/${Date.now()}_${doc.file_name}`;
+    await supabase.storage.from("sts-documents").copy(doc.file_path, newPath);
+    const { data: newDoc } = await supabase
+      .from("sts_template_documents")
+      .insert({
+        template_id: (newTemplate as STSTemplate).id,
+        file_name: doc.file_name,
+        file_path: newPath,
+        file_size: doc.file_size,
+        page_count: doc.page_count,
+        sort_order: doc.sort_order,
+      })
+      .select()
+      .single();
+    if (newDoc) docIdMap[doc.id] = newDoc.id;
+  }
+
+  // 4. Copy fields
+  const { data: fields } = await supabase
+    .from("sts_template_fields")
+    .select("*")
+    .eq("template_id", templateId);
+
+  for (const field of (fields || [])) {
+    const newDocId = docIdMap[field.template_document_id];
+    if (!newDocId) continue;
+    await supabase.from("sts_template_fields").insert({
+      template_id: (newTemplate as STSTemplate).id,
+      template_document_id: newDocId,
+      role_name: field.role_name,
+      field_type: field.field_type,
+      fill_mode: field.fill_mode,
+      label: field.label,
+      page_number: field.page_number,
+      x_position: field.x_position,
+      y_position: field.y_position,
+      width: field.width,
+      height: field.height,
+      is_required: field.is_required,
+      dropdown_options: field.dropdown_options,
+    });
+  }
+
+  return newTemplate as STSTemplate;
+}
+
 // ─── Signing by Token ────────────────────────────────────
 
 export function useSigningByToken(token: string | null) {

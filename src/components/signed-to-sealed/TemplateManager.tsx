@@ -1,6 +1,6 @@
 "use client";
 
-import { useTemplates } from "@/lib/signedToSealedHooks";
+import { useTemplates, duplicateTemplate } from "@/lib/signedToSealedHooks";
 
 interface TemplateManagerProps {
   onBack: () => void;
@@ -10,7 +10,16 @@ interface TemplateManagerProps {
 }
 
 export default function TemplateManager({ onBack, onNewTemplate, onEditTemplate, onUseTemplate }: TemplateManagerProps) {
-  const { templates, loading, deleteTemplate } = useTemplates();
+  const { templates, loading, refetch, deleteTemplate } = useTemplates();
+
+  const handleDuplicate = async (id: string) => {
+    try {
+      await duplicateTemplate(id);
+      refetch();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to duplicate template");
+    }
+  };
 
   const handleDelete = async (id: string) => {
     if (!confirm("Delete this template?")) return;
@@ -77,6 +86,13 @@ export default function TemplateManager({ onBack, onNewTemplate, onEditTemplate,
                   style={{ color: "var(--text-muted)" }}
                 >
                   Edit
+                </button>
+                <button
+                  onClick={() => handleDuplicate(t.id)}
+                  className="text-xs px-2 py-1 rounded hover:opacity-80"
+                  style={{ color: "var(--text-muted)" }}
+                >
+                  Duplicate
                 </button>
                 <button
                   onClick={() => onUseTemplate(t.id)}
