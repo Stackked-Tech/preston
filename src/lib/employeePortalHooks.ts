@@ -87,7 +87,7 @@ export function useEmployeeRecord(email: string | undefined) {
         .limit(1)
         .single();
       if (err) throw err;
-      setRecord(data as EmployeeRecord);
+      setRecord(data as unknown as EmployeeRecord);
       setError(null);
     } catch {
       setRecord(null);
