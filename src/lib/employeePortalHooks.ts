@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { supabase, isSupabaseConfigured } from "./supabase";
-import type { EmployeeFeeRecord } from "@/types/employeeportal";
+import type { EmployeeFeeRecord, EmployeeRecord } from "@/types/employeeportal";
 
 export function useEmployeeFees(email: string | undefined) {
   const [fees, setFees] = useState<EmployeeFeeRecord[]>([]);
@@ -26,7 +26,7 @@ export function useEmployeeFees(email: string | undefined) {
         .from("ea_staff")
         .select("id, branch_id, display_name, station_lease, financial_services, phorest_fee, refreshment, associate_pay, supervisor, ea_branches(name)")
         .eq("email", email)
-        .eq("is_active", true);
+        .in("status", ["active", "onboarding"]);
       if (err) throw err;
 
       const records: EmployeeFeeRecord[] = (data || []).map((row: Record<string, unknown>) => {
@@ -59,4 +59,47 @@ export function useEmployeeFees(email: string | undefined) {
   }, [fetchFees]);
 
   return { fees, loading, error };
+}
+
+export function useEmployeeRecord(email: string | undefined) {
+  const [record, setRecord] = useState<EmployeeRecord | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchRecord = useCallback(async () => {
+    if (!isSupabaseConfigured) {
+      setError("Supabase not configured");
+      setLoading(false);
+      return;
+    }
+    if (!email) {
+      setRecord(null);
+      setLoading(false);
+      return;
+    }
+    try {
+      setLoading(true);
+      const { data, error: err } = await supabase
+        .from("ea_staff")
+        .select("id, branch_id, display_name, status, onboarding_envelope_id, onboarding_signing_token, ea_branches(name)")
+        .eq("email", email)
+        .in("status", ["active", "onboarding"])
+        .limit(1)
+        .single();
+      if (err) throw err;
+      setRecord(data as EmployeeRecord);
+      setError(null);
+    } catch {
+      setRecord(null);
+      setError(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [email]);
+
+  useEffect(() => {
+    fetchRecord();
+  }, [fetchRecord]);
+
+  return { record, loading, error, refetch: fetchRecord };
 }
