@@ -904,7 +904,7 @@ export function useTasks(filters?: {
       let query = supabase
         .from("hm_tasks")
         .select(
-          "*, property:hm_properties(id, name), assigned_user:hm_users(id, name), request:hm_requests(id, description, urgency)"
+          "*, property:hm_properties(id, name, lat, lng), assigned_user:hm_users(id, name), request:hm_requests(id, description, urgency)"
         )
         .order("due_date", { ascending: true, nullsFirst: false });
 

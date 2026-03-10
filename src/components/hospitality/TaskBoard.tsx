@@ -40,6 +40,7 @@ export default function TaskBoard() {
 
   // Map state
   const [routeGeometry, setRouteGeometry] = useState<GeoJSON.LineString | null>(null);
+  const [routeStopOrder, setRouteStopOrder] = useState<string[]>([]);
 
   // Filter state
   const [statusFilters, setStatusFilters] = useState<HMTaskStatus[]>([
@@ -491,10 +492,11 @@ export default function TaskBoard() {
               tasks={filteredTasks}
               onSelectTask={handleSelectTask}
               routeGeometry={routeGeometry}
+              routeStopOrder={routeStopOrder}
             />
             <RouteOptimizer
               tasks={filteredTasks}
-              onOptimizedRoute={() => {}}
+              onOptimizedRoute={setRouteStopOrder}
               onRouteGeometry={setRouteGeometry}
             />
           </>
@@ -564,7 +566,7 @@ export default function TaskBoard() {
             <span className="text-[10px] font-medium">My Tasks</span>
           </button>
           <button
-            onClick={() => { setTabMode("map"); setRouteGeometry(null); }}
+            onClick={() => { setTabMode("map"); setRouteGeometry(null); setRouteStopOrder([]); }}
             className="flex-1 flex flex-col items-center justify-center gap-1 min-h-[60px]"
             style={{
               color: tabMode === "map" ? "var(--gold)" : "var(--text-muted)",
