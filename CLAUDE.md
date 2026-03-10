@@ -15,7 +15,7 @@ No test framework is configured.
 
 ## Project Overview
 
-**WHB Companies Command Center** — A Next.js App Router application hosting seven micro-apps:
+**WHB Companies Command Center** — A Next.js App Router application hosting eight micro-apps:
 
 1. **Brain Dump** (`/brain-dump`) — Project portfolio tracker with drag-and-drop requirements, tags, comments, attachments, and CSV/PDF export
 2. **R Alexander Time Clock** (`/time-clock`) — Employee time tracking with job assignments, overtime calculation, and reporting
@@ -24,6 +24,7 @@ No test framework is configured.
 5. **Paramount Communications** (`/paramount`) — SMS messaging portal with Twilio integration, 1:1 and bulk messaging, contact management with tags, scheduled messages, delivery tracking, broadcast history, and message search
 6. **Employee Admin** (`/employee-admin`) — Staff configuration management for payroll (names, NetSuite IDs, station leases, fees) across all WHB salon branches, backed by Supabase
 7. **Employee Portal** (`/employee`) — Employee-facing portal with Supabase Auth login, placeholder onboarding, and read-only fee dashboard
+8. **Hospitality Management** (`/hospitality`) — QR-code-driven maintenance request pipeline with tenant submission, manager approval workflow, maintenance staff task board (PWA), recurring task scheduling, and admin configuration. Features SMS notifications via Twilio and Spanish translation via Claude Haiku 4.5.
 
 ## Tech Stack
 
@@ -55,6 +56,10 @@ No test framework is configured.
 /employee                  → Employee login (Supabase Auth)
 /employee/onboarding       → First-login onboarding placeholder
 /employee/dashboard        → Fee summary dashboard (auth required)
+/hospitality                        → Manager dashboard (password gated)
+/hospitality/request/[propertyId]   → Public tenant request form (QR code target)
+/hospitality/tasks                  → Maintenance staff task board (custom user login)
+/hospitality/admin                  → Admin panel (password gated)
 ```
 
 ### Data Layer
@@ -68,6 +73,7 @@ Most database access is **client-side via Supabase SDK**. Each micro-app has its
 - `src/lib/employeeAdminHooks.ts` — Employee Admin (`useBranches`, `useStaff`, `useNameOverrides`)
 - `src/lib/employeeAuthHooks.ts` — Employee Portal (`useEmployeeAuth`)
 - `src/lib/employeePortalHooks.ts` — Employee Portal (`useEmployeeFees`)
+- `src/lib/hospitalityHooks.ts` — Hospitality Management (`useProperties`, `useRequesterTypes`, `useCategories`, `useHMUsers`, `useUserProperties`, `usePropertyByQrCode`, `useRequests`, `useSubmitRequest`, `useReviewRequest`, `useTasks`, `useTaskDetail`, `useTaskActions`, `useRecurringTasks`)
 
 **Exception — Payout Suite:** Uses a server-side API route (`src/app/api/phorest/payroll/route.ts`) that calls the Phorest API, transforms CSV data, generates XLSX, and uploads to Supabase Storage.
 
@@ -83,6 +89,12 @@ Most database access is **client-side via Supabase SDK**. Each micro-app has its
 - `src/app/api/signed-to-sealed/send-invite/route.ts` — Send signing invitation emails via Resend
 - `src/lib/signingEmailTemplate.ts` — HTML email template generator (table-based, inline styles for email client compatibility)
 
+**Exception — Hospitality Management:** Uses server-side API routes:
+- `src/app/api/hospitality/sms/route.ts` — Send SMS via Twilio REST API
+- `src/app/api/hospitality/translate/route.ts` — Translate text via Claude Haiku 4.5
+- `src/app/api/hospitality/auth/route.ts` — User login and password management (bcrypt)
+- `src/app/api/hospitality/recurring/route.ts` — Cron endpoint for recurring task generation
+
 Payout Suite key libs:
 - `src/lib/payrollTransform.ts` — Phorest CSV → per-staff payroll data
 - `src/lib/payrollExcel.ts` — XLSX generation for NetSuite import
@@ -93,7 +105,7 @@ Payout Suite key libs:
 
 ### Type Definitions (`src/types/`)
 
-Separate type files per domain: `database.ts` (Brain Dump), `timeclock.ts`, `signedtosealed.ts`, `paramount.ts`, `employeeadmin.ts`, `employeeportal.ts`. Insert/Update types are derived from main types using `Omit`.
+Separate type files per domain: `database.ts` (Brain Dump), `timeclock.ts`, `signedtosealed.ts`, `paramount.ts`, `employeeadmin.ts`, `employeeportal.ts`, `hospitality.ts`. Insert/Update types are derived from main types using `Omit`.
 
 ### Component Structure
 
@@ -107,6 +119,8 @@ Large feature components live in `src/components/`. Brain Dump, Time Clock, and 
 - `BroadcastHistory.tsx` — Expandable broadcast list with per-recipient delivery status
 - `MessageSearch.tsx` — Cmd+K search overlay with highlighted results
 
+Hospitality Management uses 18 components in `src/components/hospitality/`: `RequestForm.tsx` (public tenant form), `ManagerDashboard.tsx` (orchestrator), `RequestQueue.tsx`, `RequestReviewCard.tsx`, `ApprovalModal.tsx`, `RejectionModal.tsx`, `TaskBoard.tsx` (PWA orchestrator), `TaskList.tsx`, `TaskDetail.tsx`, `TaskStatusBar.tsx`, `TranslateButton.tsx`, `HospitalityAdmin.tsx` (admin orchestrator), `PropertyManager.tsx`, `UserManager.tsx`, `CategoryManager.tsx`, `RequesterTypeManager.tsx`, `RecurringTaskManager.tsx`, `StatsDashboard.tsx`.
+
 ### Theming (`src/lib/theme.tsx`)
 
 Dark/light mode via React Context + CSS variables. Theme persists in localStorage. All colors reference CSS variables (`--bg-primary`, `--text-primary`, `--gold`, etc.) defined in `src/app/globals.css`. Gold accent (#d4af37) is the brand color.
@@ -117,7 +131,7 @@ No Supabase Auth for most micro-apps — RLS policies are fully permissive (desi
 
 ### File Storage
 
-Supabase Storage buckets: `attachments` (Brain Dump files), `sts-documents` (Signed to Sealed PDFs — envelope docs at `{envelopeId}/`, template docs at `templates/{templateId}/`), and `payroll` (Payout Suite XLSX files).
+Supabase Storage buckets: `attachments` (Brain Dump files), `sts-documents` (Signed to Sealed PDFs — envelope docs at `{envelopeId}/`, template docs at `templates/{templateId}/`), `payroll` (Payout Suite XLSX files), and `hospitality` (request photos at `requests/{requestId}/`, task photos at `tasks/{taskId}/{before|during|after}/`).
 
 ### Paramount Communications — Twilio Integration
 
@@ -139,8 +153,9 @@ Schema files at project root:
 - `supabase-sts-templates-migration.sql` — Migration for template documents/fields tables + fill_mode/label columns on sts_fields
 - `supabase-paramount-schema.sql` — Paramount Communications tables (`pc_contacts`, `pc_messages`, `pc_broadcasts`, `pc_broadcast_recipients`, `pc_scheduled_messages`)
 - `supabase-employeeadmin-schema.sql` — Employee Admin tables (`ea_branches`, `ea_staff`, `ea_name_overrides`)
+- `supabase-hospitality-schema.sql` — Hospitality Management tables (`hm_properties`, `hm_requester_types`, `hm_categories`, `hm_users`, `hm_user_properties`, `hm_requests`, `hm_request_photos`, `hm_tasks`, `hm_task_notes`, `hm_task_photos`, `hm_task_time_logs`, `hm_task_materials`, `hm_recurring_tasks`)
 
-Time Clock tables use `tc_` prefix. Signed to Sealed tables use `sts_` prefix. Paramount Communications tables use `pc_` prefix. Employee Admin tables use `ea_` prefix.
+Time Clock tables use `tc_` prefix. Signed to Sealed tables use `sts_` prefix. Paramount Communications tables use `pc_` prefix. Employee Admin tables use `ea_` prefix. Hospitality Management tables use `hm_` prefix.
 
 ## Environment Variables
 
@@ -156,6 +171,8 @@ TWILIO_PHONE_NUMBER=<+1XXXXXXXXXX>          # Paramount Communications
 CRON_SECRET=<cron-secret>                   # Paramount Communications (scheduled messages)
 RESEND_API_KEY=<resend-api-key>             # Signed to Sealed (email invitations)
 RESEND_FROM_EMAIL=<sender@yourdomain.com>   # Signed to Sealed (optional, defaults to onboarding@resend.dev)
+ANTHROPIC_API_KEY=<anthropic-api-key>          # Hospitality (Claude Haiku translation)
+TWILIO_HM_PHONE_NUMBER=<+1XXXXXXXXXX>          # Hospitality (dedicated Twilio number, optional)
 ```
 
 The Supabase client (`src/lib/supabase.ts`) creates a placeholder if env vars are missing — the app builds but shows error states at runtime.
