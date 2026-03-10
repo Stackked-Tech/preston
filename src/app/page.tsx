@@ -54,6 +54,13 @@ const microApps = [
     icon: "👥",
     color: "#6366f1",
   },
+  {
+    name: "Hospitality Management",
+    description: "Maintenance requests & task management",
+    href: "/hospitality",
+    icon: "🏠",
+    color: "#d4af37",
+  },
 ];
 
 export default function Home() {
