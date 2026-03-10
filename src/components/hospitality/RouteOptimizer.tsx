@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { HMTaskWithDetails } from "@/types/hospitality";
+import AddressAutocomplete, { type AddressResult } from "./AddressAutocomplete";
 
 interface RouteOptimizerProps {
   tasks: HMTaskWithDetails[];
@@ -15,6 +16,12 @@ interface RouteResult {
   totalDistance: number; // meters
 }
 
+interface StartLocation {
+  label: string;
+  lat: number;
+  lng: number;
+}
+
 export default function RouteOptimizer({
   tasks,
   onOptimizedRoute,
@@ -24,13 +31,25 @@ export default function RouteOptimizer({
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<RouteResult | null>(null);
   const [collapsed, setCollapsed] = useState(false);
+  const [startInput, setStartInput] = useState("");
+  const [startLocation, setStartLocation] = useState<StartLocation | null>(null);
 
   const geocodedTasks = tasks.filter(
     (t) => t.property?.lat != null && t.property?.lng != null
   );
 
+  const handleStartSelect = (result: AddressResult) => {
+    setStartLocation({
+      label: result.address,
+      lat: result.lat,
+      lng: result.lng,
+    });
+  };
+
+  const canOptimize = startLocation && geocodedTasks.length >= 1;
+
   const handleOptimize = async () => {
-    if (geocodedTasks.length < 2) return;
+    if (!canOptimize) return;
 
     setLoading(true);
     setError(null);
@@ -42,13 +61,16 @@ export default function RouteOptimizer({
         return;
       }
 
-      // Build coordinates string: lng,lat;lng,lat;...
-      const coordinates = geocodedTasks
-        .map((t) => `${t.property!.lng},${t.property!.lat}`)
-        .join(";");
+      // Build coordinates: start location first, then all task locations
+      const coords = [
+        `${startLocation.lng},${startLocation.lat}`,
+        ...geocodedTasks.map((t) => `${t.property!.lng},${t.property!.lat}`),
+      ].join(";");
+
+
 
       const response = await fetch(
-        `https://api.mapbox.com/optimized-trips/v1/mapbox/driving/${coordinates}?access_token=${token}&roundtrip=true&source=first&geometries=geojson&overview=full`
+        `https://api.mapbox.com/optimized-trips/v1/mapbox/driving/${coords}?access_token=${token}&roundtrip=true&source=first&geometries=geojson&overview=full`
       );
 
       if (!response.ok) {
@@ -66,33 +88,26 @@ export default function RouteOptimizer({
       const trip = data.trips[0];
       const waypoints = data.waypoints;
 
-      // waypoints have waypoint_index that tells the optimized order
-      const orderedTasks = waypoints
-        .sort(
-          (a: { waypoint_index: number }, b: { waypoint_index: number }) =>
-            a.waypoint_index - b.waypoint_index
-        )
-        .map(
-          (wp: { waypoint_index: number; trips_index: number }, idx: number) => {
-            // The original index in our geocodedTasks array
-            // waypoints array corresponds 1:1 with the coordinates we sent
-            const originalIdx = waypoints.findIndex(
-              (w: { waypoint_index: number }) => w.waypoint_index === idx
-            );
-            // Find which original geocodedTask corresponds to this waypoint
-            return geocodedTasks[originalIdx >= 0 ? originalIdx : idx];
-          }
-        )
-        .filter(Boolean);
+      // waypoints[0] is the starting location, the rest map to geocodedTasks
+      // Build ordered task list by waypoint_index (skip the start point at index 0)
+      const orderedByIndex: (HMTaskWithDetails | null)[] = new Array(
+        geocodedTasks.length + 1
+      ).fill(null);
 
-      // Build ordered list by waypoint_index
-      const orderedByIndex: HMTaskWithDetails[] = new Array(geocodedTasks.length);
       waypoints.forEach(
         (wp: { waypoint_index: number }, originalIdx: number) => {
-          orderedByIndex[wp.waypoint_index] = geocodedTasks[originalIdx];
+          if (originalIdx === 0) {
+            // This is the starting location, skip
+            orderedByIndex[wp.waypoint_index] = null;
+          } else {
+            orderedByIndex[wp.waypoint_index] = geocodedTasks[originalIdx - 1];
+          }
         }
       );
-      const finalOrdered = orderedByIndex.filter(Boolean);
+
+      const finalOrdered = orderedByIndex.filter(
+        (t): t is HMTaskWithDetails => t !== null
+      );
 
       const routeResult: RouteResult = {
         orderedTasks: finalOrdered,
@@ -101,7 +116,16 @@ export default function RouteOptimizer({
       };
 
       setResult(routeResult);
-      onOptimizedRoute(finalOrdered.map((t) => t.id));
+      // Pass unique property IDs in route order for map stop numbering
+      const seenProps = new Set<string>();
+      const orderedPropertyIds: string[] = [];
+      for (const t of finalOrdered) {
+        if (t.property?.id && !seenProps.has(t.property.id)) {
+          seenProps.add(t.property.id);
+          orderedPropertyIds.push(t.property.id);
+        }
+      }
+      onOptimizedRoute(orderedPropertyIds);
       onRouteGeometry(trip.geometry as GeoJSON.LineString);
     } catch (err) {
       console.error("Route optimization error:", err);
@@ -115,6 +139,7 @@ export default function RouteOptimizer({
     setResult(null);
     setError(null);
     onRouteGeometry(null);
+    onOptimizedRoute([]);
   };
 
   const formatDuration = (seconds: number): string => {
@@ -129,13 +154,13 @@ export default function RouteOptimizer({
     return `${miles.toFixed(1)} mi`;
   };
 
-  if (geocodedTasks.length < 2) {
+  if (geocodedTasks.length === 0) {
     return (
       <div
         className="px-4 py-3 text-xs text-center"
         style={{ color: "var(--text-muted)", background: "var(--bg-secondary)" }}
       >
-        Need at least 2 locations to optimize
+        No geocoded task locations to route
       </div>
     );
   }
@@ -186,19 +211,45 @@ export default function RouteOptimizer({
 
       {!collapsed && (
         <div className="px-4 pb-3">
+          {/* Starting address */}
+          <div className="mb-3">
+            <AddressAutocomplete
+              value={startInput}
+              onChange={setStartInput}
+              onSelect={handleStartSelect}
+              label="Starting Address"
+              placeholder="Enter your starting location..."
+            />
+            {startLocation && (
+              <p
+                className="text-[10px] mt-1 flex items-center gap-1"
+                style={{ color: "var(--gold)" }}
+              >
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+                Starting from: {startLocation.label}
+              </p>
+            )}
+          </div>
+
           {/* Optimize button */}
           <div className="flex gap-2 mb-3">
             <button
               onClick={handleOptimize}
-              disabled={loading}
+              disabled={loading || !canOptimize}
               className="flex-1 py-2 rounded-lg text-xs font-semibold transition-opacity"
               style={{
                 background: "var(--gold)",
                 color: "#000",
-                opacity: loading ? 0.6 : 1,
+                opacity: loading || !canOptimize ? 0.4 : 1,
               }}
             >
-              {loading ? "Optimizing..." : "Optimize Route"}
+              {loading
+                ? "Optimizing..."
+                : !startLocation
+                  ? "Enter starting address"
+                  : "Optimize Route"}
             </button>
             {result && (
               <button
@@ -259,6 +310,33 @@ export default function RouteOptimizer({
 
               {/* Ordered stop list */}
               <div className="space-y-1">
+                {/* Start point */}
+                <div
+                  className="flex items-center gap-2 px-2 py-1.5 rounded text-xs"
+                  style={{ background: "var(--bg-tertiary)" }}
+                >
+                  <span
+                    className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 text-[10px] font-bold"
+                    style={{ background: "var(--gold)", color: "#000" }}
+                  >
+                    S
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div
+                      className="truncate font-medium"
+                      style={{ color: "var(--text-primary)" }}
+                    >
+                      {startLocation!.label}
+                    </div>
+                    <div
+                      className="truncate"
+                      style={{ color: "var(--text-muted)" }}
+                    >
+                      Starting point
+                    </div>
+                  </div>
+                </div>
+
                 {result.orderedTasks.map((task, idx) => (
                   <div
                     key={task.id}
