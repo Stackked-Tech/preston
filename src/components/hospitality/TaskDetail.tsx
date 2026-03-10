@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useTaskDetail, useTaskActions } from "@/lib/hospitalityHooks";
-import type { HMTaskStatus, HMPhotoType } from "@/types/hospitality";
+import { useTaskDetail, useTaskActions, useHMUsers } from "@/lib/hospitalityHooks";
+import type { HMTaskStatus, HMPhotoType, HMPriority } from "@/types/hospitality";
 import TaskStatusBar from "./TaskStatusBar";
 import TranslateButton from "./TranslateButton";
 
@@ -20,6 +20,13 @@ const TABS: { value: Tab; label: string }[] = [
   { value: "photos", label: "Photos" },
   { value: "time", label: "Time" },
   { value: "materials", label: "Materials" },
+];
+
+const PRIORITY_OPTIONS: { value: HMPriority; label: string; color: string }[] = [
+  { value: "critical", label: "Critical", color: "#ef4444" },
+  { value: "high", label: "High", color: "#f97316" },
+  { value: "medium", label: "Medium", color: "#3b82f6" },
+  { value: "low", label: "Low", color: "#9ca3af" },
 ];
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
@@ -62,6 +69,49 @@ function formatElapsed(startedAt: string): string {
   return `${hrs.toString().padStart(2, "0")}:${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
 }
 
+function formatAge(dateStr: string): string {
+  const d = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now.getTime() - d.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  if (diffMins < 1) return "Just now";
+  if (diffMins < 60) return `${diffMins} min ago`;
+  if (diffHours < 24) return `${diffHours} hr${diffHours !== 1 ? "s" : ""} ago`;
+  if (diffDays === 1) return "Yesterday";
+  if (diffDays < 30) return `${diffDays} days ago`;
+  const diffMonths = Math.floor(diffDays / 30);
+  return `${diffMonths} month${diffMonths !== 1 ? "s" : ""} ago`;
+}
+
+function getDueDateInfo(dateStr: string): { label: string; color: string; isOverdue: boolean; isDueToday: boolean } {
+  const due = new Date(dateStr + "T23:59:59");
+  const now = new Date();
+  const diffDays = Math.floor((due.getTime() - now.getTime()) / 86400000);
+  const isOverdue = diffDays < 0;
+  const isDueToday = diffDays === 0;
+
+  let label: string;
+  if (isDueToday) label = "Due today";
+  else if (diffDays === 1) label = "Due tomorrow";
+  else if (diffDays === -1) label = "1 day overdue";
+  else if (isOverdue) label = `${Math.abs(diffDays)} days overdue`;
+  else if (diffDays <= 7) label = `Due in ${diffDays} days`;
+  else {
+    label = new Date(dateStr).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  }
+
+  const color = isOverdue ? "#ef4444" : isDueToday ? "#f97316" : "var(--text-secondary)";
+
+  return { label, color, isOverdue, isDueToday };
+}
+
 export default function TaskDetail({
   taskId,
   currentUser,
@@ -79,9 +129,15 @@ export default function TaskDetail({
   } = useTaskDetail(taskId);
 
   const actions = useTaskActions(taskId);
+  const { users: staffUsers } = useHMUsers("staff");
 
   const [activeTab, setActiveTab] = useState<Tab>("details");
   const [fullScreenPhoto, setFullScreenPhoto] = useState<string | null>(null);
+
+  // Inline edit state
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState("");
+  const [savedField, setSavedField] = useState<string | null>(null);
 
   // Activity tab state
   const [noteText, setNoteText] = useState("");
@@ -124,6 +180,25 @@ export default function TaskDetail({
     setElapsed(formatElapsed(activeTimer.started_at));
     return () => clearInterval(interval);
   }, [activeTimer]);
+
+  // Show brief "Saved" indicator
+  const flashSaved = useCallback((field: string) => {
+    setSavedField(field);
+    setTimeout(() => setSavedField(null), 1500);
+  }, []);
+
+  const handleFieldUpdate = useCallback(
+    async (field: string, updates: Parameters<typeof actions.updateTask>[0]) => {
+      try {
+        await actions.updateTask(updates);
+        flashSaved(field);
+        refetch();
+      } catch {
+        // Error handled silently
+      }
+    },
+    [actions, flashSaved, refetch]
+  );
 
   const handleStatusChange = useCallback(
     async (status: HMTaskStatus) => {
@@ -274,6 +349,15 @@ export default function TaskDetail({
     [actions, refetch]
   );
 
+  const handleTitleSave = useCallback(async () => {
+    if (!titleDraft.trim()) {
+      setEditingTitle(false);
+      return;
+    }
+    await handleFieldUpdate("title", { title: titleDraft.trim() });
+    setEditingTitle(false);
+  }, [titleDraft, handleFieldUpdate]);
+
   if (loading) {
     return (
       <div
@@ -331,6 +415,9 @@ export default function TaskDetail({
   // Build request photos from the task's request
   const requestDescription = task.request?.description || task.description || "";
 
+  const priorityInfo = PRIORITY_OPTIONS.find((p) => p.value === task.priority) || PRIORITY_OPTIONS[2];
+  const dueDateInfo = task.due_date ? getDueDateInfo(task.due_date) : null;
+
   return (
     <div className="h-full flex flex-col overflow-hidden">
       {/* Full screen photo overlay */}
@@ -355,21 +442,168 @@ export default function TaskDetail({
 
       {/* Task header */}
       <div
-        className="flex-shrink-0 px-4 pt-3 pb-2 border-b"
+        className="flex-shrink-0 px-4 pt-3 pb-3 border-b"
         style={{ borderColor: "var(--border-light)" }}
       >
-        <h2
-          className="text-base font-bold m-0 mb-1"
-          style={{ color: "var(--text-primary)" }}
-        >
-          {task.title || "Maintenance Task"}
-        </h2>
+        {/* Editable title */}
+        {editingTitle ? (
+          <input
+            autoFocus
+            value={titleDraft}
+            onChange={(e) => setTitleDraft(e.target.value)}
+            onBlur={handleTitleSave}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleTitleSave();
+              if (e.key === "Escape") setEditingTitle(false);
+            }}
+            className="text-base font-bold m-0 mb-1 w-full rounded-lg border px-2 py-1 outline-none"
+            style={{
+              color: "var(--text-primary)",
+              background: "var(--input-bg)",
+              borderColor: "var(--border-light)",
+            }}
+          />
+        ) : (
+          <h2
+            className="text-base font-bold m-0 mb-1 cursor-pointer"
+            style={{ color: "var(--text-primary)" }}
+            onClick={() => {
+              setTitleDraft(task.title || "");
+              setEditingTitle(true);
+            }}
+            title="Click to edit title"
+          >
+            {task.title || "Maintenance Task"}
+          </h2>
+        )}
         {task.property && (
-          <p className="text-xs m-0" style={{ color: "var(--text-muted)" }}>
+          <p className="text-xs m-0 mb-2" style={{ color: "var(--text-muted)" }}>
             {task.property.name}
             {task.property.address ? ` - ${task.property.address}` : ""}
           </p>
         )}
+
+        {/* Inline metadata row: Priority, Due Date, Created */}
+        <div
+          className="flex flex-wrap items-center gap-x-4 gap-y-2 pt-2 border-t"
+          style={{ borderColor: "var(--border-light)" }}
+        >
+          {/* Priority dropdown */}
+          <div className="flex items-center gap-1.5">
+            <span
+              className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+              style={{ background: priorityInfo.color }}
+            />
+            <select
+              value={task.priority}
+              onChange={(e) =>
+                handleFieldUpdate("priority", {
+                  priority: e.target.value as HMPriority,
+                })
+              }
+              className="text-xs font-medium rounded-md border px-1.5 py-1 outline-none cursor-pointer appearance-none pr-5"
+              style={{
+                background: "var(--input-bg)",
+                borderColor: "var(--border-light)",
+                color: priorityInfo.color,
+              }}
+            >
+              {PRIORITY_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+            {savedField === "priority" && (
+              <span className="text-[10px] font-medium" style={{ color: "#22c55e" }}>
+                Saved
+              </span>
+            )}
+          </div>
+
+          {/* Due date input */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+              Due:
+            </span>
+            <input
+              type="date"
+              value={task.due_date || ""}
+              onChange={(e) =>
+                handleFieldUpdate("due_date", {
+                  due_date: e.target.value || null,
+                })
+              }
+              className="text-xs font-medium rounded-md border px-1.5 py-1 outline-none cursor-pointer"
+              style={{
+                background: "var(--input-bg)",
+                borderColor: "var(--border-light)",
+                color: dueDateInfo ? dueDateInfo.color : "var(--text-secondary)",
+              }}
+            />
+            {dueDateInfo && (
+              <span
+                className="text-[10px] font-medium"
+                style={{ color: dueDateInfo.color }}
+              >
+                {dueDateInfo.isOverdue ? "!" : ""} {dueDateInfo.label}
+              </span>
+            )}
+            {savedField === "due_date" && (
+              <span className="text-[10px] font-medium" style={{ color: "#22c55e" }}>
+                Saved
+              </span>
+            )}
+          </div>
+
+          {/* Created date */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+              Created:
+            </span>
+            <span className="text-xs" style={{ color: "var(--text-secondary)" }}>
+              {formatAge(task.created_at)}
+            </span>
+          </div>
+        </div>
+
+        {/* Assigned to row */}
+        <div className="flex items-center gap-1.5 mt-2">
+          <span className="text-[10px] uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+            Assigned:
+          </span>
+          <select
+            value={task.assigned_to || ""}
+            onChange={(e) =>
+              handleFieldUpdate("assigned_to", {
+                assigned_to: e.target.value || null,
+              })
+            }
+            className="text-xs font-medium rounded-md border px-1.5 py-1 outline-none cursor-pointer"
+            style={{
+              background: "var(--input-bg)",
+              borderColor: "var(--border-light)",
+              color: "var(--text-secondary)",
+            }}
+          >
+            <option value="">Unassigned</option>
+            {staffUsers.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.name}
+              </option>
+            ))}
+          </select>
+          {savedField === "assigned_to" && (
+            <span className="text-[10px] font-medium" style={{ color: "#22c55e" }}>
+              Saved
+            </span>
+          )}
+          {savedField === "title" && (
+            <span className="text-[10px] font-medium ml-2" style={{ color: "#22c55e" }}>
+              Title saved
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Status bar */}
@@ -409,7 +643,7 @@ export default function TaskDetail({
 
       {/* Tab content */}
       <div className="flex-1 overflow-y-auto">
-        {/* ═══ DETAILS TAB ═══ */}
+        {/* DETAILS TAB */}
         {activeTab === "details" && (
           <div className="p-4 space-y-4">
             {/* Description */}
@@ -476,13 +710,13 @@ export default function TaskDetail({
               </div>
             )}
 
-            {/* Task metadata */}
+            {/* Task summary cards */}
             <div>
               <h3
                 className="text-xs font-semibold uppercase tracking-wider mb-2"
                 style={{ color: "var(--text-muted)" }}
               >
-                Info
+                Summary
               </h3>
               <div className="grid grid-cols-2 gap-2">
                 {task.request &&
@@ -513,21 +747,33 @@ export default function TaskDetail({
                       }
                     />
                   )}
-                <InfoCard label="Priority" value={task.priority} />
+                <InfoCard
+                  label="Time Logged"
+                  value={totalMinutes > 0 ? formatDuration(totalMinutes) : "None"}
+                />
+                <InfoCard
+                  label="Materials Cost"
+                  value={totalCost > 0 ? `$${totalCost.toFixed(2)}` : "None"}
+                />
+                <InfoCard
+                  label="Created"
+                  value={new Date(task.created_at).toLocaleDateString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric",
+                  })}
+                />
                 {task.due_date && (
+                  <DueDateInfoCard dueDate={task.due_date} />
+                )}
+                {task.completed_at && (
                   <InfoCard
-                    label="Due Date"
-                    value={new Date(task.due_date).toLocaleDateString("en-US", {
+                    label="Completed"
+                    value={new Date(task.completed_at).toLocaleDateString("en-US", {
                       month: "short",
                       day: "numeric",
                       year: "numeric",
                     })}
-                  />
-                )}
-                {task.assigned_user && (
-                  <InfoCard
-                    label="Assigned To"
-                    value={task.assigned_user.name}
                   />
                 )}
               </div>
@@ -535,7 +781,7 @@ export default function TaskDetail({
           </div>
         )}
 
-        {/* ═══ ACTIVITY TAB ═══ */}
+        {/* ACTIVITY TAB */}
         {activeTab === "activity" && (
           <div className="flex flex-col h-full">
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
@@ -614,7 +860,7 @@ export default function TaskDetail({
           </div>
         )}
 
-        {/* ═══ PHOTOS TAB ═══ */}
+        {/* PHOTOS TAB */}
         {activeTab === "photos" && (
           <div className="p-4 space-y-6">
             {(
@@ -687,7 +933,7 @@ export default function TaskDetail({
           </div>
         )}
 
-        {/* ═══ TIME TAB ═══ */}
+        {/* TIME TAB */}
         {activeTab === "time" && (
           <div className="p-4 space-y-6">
             {/* Timer */}
@@ -873,7 +1119,7 @@ export default function TaskDetail({
                           >
                             {log.duration_minutes !== null
                               ? formatDuration(log.duration_minutes)
-                              : "—"}
+                              : "\u2014"}
                           </span>
                         </div>
                         {log.notes && (
@@ -892,7 +1138,7 @@ export default function TaskDetail({
           </div>
         )}
 
-        {/* ═══ MATERIALS TAB ═══ */}
+        {/* MATERIALS TAB */}
         {activeTab === "materials" && (
           <div className="p-4 space-y-4">
             {/* Total cost */}
@@ -1069,7 +1315,7 @@ export default function TaskDetail({
   );
 }
 
-// ─── Sub-components ────────────────────────────────
+// ---- Sub-components ----
 
 function InfoCard({ label, value }: { label: string; value: string }) {
   return (
@@ -1091,6 +1337,40 @@ function InfoCard({ label, value }: { label: string; value: string }) {
         style={{ color: "var(--text-primary)" }}
       >
         {value.replace(/_/g, " ")}
+      </p>
+    </div>
+  );
+}
+
+function DueDateInfoCard({ dueDate }: { dueDate: string }) {
+  const info = getDueDateInfo(dueDate);
+  return (
+    <div
+      className="rounded-lg border p-2.5"
+      style={{
+        background: info.isOverdue
+          ? "rgba(239, 68, 68, 0.08)"
+          : info.isDueToday
+            ? "rgba(249, 115, 22, 0.08)"
+            : "var(--card-bg)",
+        borderColor: info.isOverdue
+          ? "rgba(239, 68, 68, 0.3)"
+          : info.isDueToday
+            ? "rgba(249, 115, 22, 0.3)"
+            : "var(--border-light)",
+      }}
+    >
+      <p
+        className="text-[10px] uppercase tracking-wider m-0"
+        style={{ color: "var(--text-muted)" }}
+      >
+        Schedule
+      </p>
+      <p
+        className="text-sm font-medium m-0 mt-0.5"
+        style={{ color: info.color }}
+      >
+        {info.label}
       </p>
     </div>
   );

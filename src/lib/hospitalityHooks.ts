@@ -1184,8 +1184,20 @@ export function useTaskActions(taskId: string) {
     if (error) throw error;
   }, []);
 
+  const updateTask = useCallback(
+    async (updates: { priority?: HMPriority; due_date?: string | null; assigned_to?: string | null; title?: string }) => {
+      const { error } = await supabase
+        .from("hm_tasks")
+        .update(updates)
+        .eq("id", taskId);
+      if (error) throw error;
+    },
+    [taskId]
+  );
+
   return {
     updateStatus,
+    updateTask,
     addNote,
     addPhoto,
     startTimer,

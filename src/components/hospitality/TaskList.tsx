@@ -38,12 +38,27 @@ const PRIORITY_COLORS: Record<HMPriority, string> = {
   low: "#9ca3af",
 };
 
+const PRIORITY_LABELS: Record<HMPriority, string> = {
+  critical: "Critical",
+  high: "High",
+  medium: "Med",
+  low: "Low",
+};
+
 const STATUS_LABELS: Record<HMTaskStatus, string> = {
   new: "New",
   acknowledged: "Ack",
   in_progress: "In Progress",
   on_hold: "On Hold",
   completed: "Done",
+};
+
+const STATUS_PROGRESS: Record<HMTaskStatus, { step: number; total: number }> = {
+  new: { step: 1, total: 5 },
+  acknowledged: { step: 2, total: 5 },
+  in_progress: { step: 3, total: 5 },
+  on_hold: { step: 3, total: 5 },
+  completed: { step: 5, total: 5 },
 };
 
 function formatDueDate(dateStr: string): { label: string; overdue: boolean } {
@@ -66,6 +81,20 @@ function formatDueDate(dateStr: string): { label: string; overdue: boolean } {
     }),
     overdue: false,
   };
+}
+
+function formatAge(dateStr: string): string {
+  const d = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now.getTime() - d.getTime();
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  if (diffHours < 1) return "Just now";
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays === 1) return "1d ago";
+  if (diffDays < 30) return `${diffDays}d ago`;
+  return new Date(dateStr).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
 export default function TaskList({
@@ -172,10 +201,10 @@ export default function TaskList({
             >
               <div className="flex gap-3">
                 <div
-                  className="w-1 rounded-full flex-shrink-0"
+                  className="w-1.5 rounded-full flex-shrink-0"
                   style={{
                     background: "var(--border-light)",
-                    minHeight: 48,
+                    minHeight: 56,
                   }}
                 />
                 <div className="flex-1 space-y-2">
@@ -185,6 +214,10 @@ export default function TaskList({
                   />
                   <div
                     className="h-3 rounded w-1/2"
+                    style={{ background: "var(--border-light)" }}
+                  />
+                  <div
+                    className="h-3 rounded w-2/3"
                     style={{ background: "var(--border-light)" }}
                   />
                 </div>
@@ -235,6 +268,7 @@ export default function TaskList({
             const dueInfo = task.due_date
               ? formatDueDate(task.due_date)
               : null;
+            const progress = STATUS_PROGRESS[task.status];
 
             return (
               <button
@@ -247,14 +281,22 @@ export default function TaskList({
                 }}
               >
                 <div className="flex gap-3">
-                  {/* Priority bar */}
-                  <div
-                    className="w-1 rounded-full flex-shrink-0"
-                    style={{
-                      background: priorityColor,
-                      minHeight: 48,
-                    }}
-                  />
+                  {/* Priority bar - wider with label */}
+                  <div className="flex flex-col items-center flex-shrink-0 gap-1">
+                    <div
+                      className="w-1.5 rounded-full flex-1"
+                      style={{
+                        background: priorityColor,
+                        minHeight: 40,
+                      }}
+                    />
+                    <span
+                      className="text-[8px] font-bold uppercase tracking-wider"
+                      style={{ color: priorityColor }}
+                    >
+                      {PRIORITY_LABELS[task.priority]}
+                    </span>
+                  </div>
 
                   <div className="flex-1 min-w-0">
                     {/* Title */}
@@ -275,7 +317,43 @@ export default function TaskList({
                       </p>
                     )}
 
-                    {/* Bottom row: status badge, due date, assignee */}
+                    {/* Second row: due date prominent + created age */}
+                    <div className="flex items-center gap-3 mt-1.5">
+                      {dueInfo && (
+                        <span
+                          className="text-xs font-semibold flex items-center gap-1"
+                          style={{
+                            color: dueInfo.overdue
+                              ? "#ef4444"
+                              : "var(--text-secondary)",
+                          }}
+                        >
+                          <svg
+                            width="11"
+                            height="11"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2.5"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <circle cx="12" cy="12" r="10" />
+                            <polyline points="12 6 12 12 16 14" />
+                          </svg>
+                          {dueInfo.overdue ? "! " : ""}
+                          {dueInfo.label}
+                        </span>
+                      )}
+                      <span
+                        className="text-[10px]"
+                        style={{ color: "var(--text-muted)" }}
+                      >
+                        Created {formatAge(task.created_at)}
+                      </span>
+                    </div>
+
+                    {/* Bottom row: status badge, progress, assignee */}
                     <div className="flex items-center gap-2 mt-2 flex-wrap">
                       <span
                         className="text-[10px] font-medium px-2 py-0.5 rounded-full"
@@ -287,19 +365,27 @@ export default function TaskList({
                         {STATUS_LABELS[task.status]}
                       </span>
 
-                      {dueInfo && (
+                      {/* Progress dots */}
+                      <div className="flex items-center gap-0.5">
+                        {Array.from({ length: progress.total }).map((_, i) => (
+                          <div
+                            key={i}
+                            className="w-1.5 h-1.5 rounded-full"
+                            style={{
+                              background:
+                                i < progress.step
+                                  ? statusColor.text
+                                  : "var(--border-light)",
+                            }}
+                          />
+                        ))}
                         <span
-                          className="text-[10px] font-medium"
-                          style={{
-                            color: dueInfo.overdue
-                              ? "#ef4444"
-                              : "var(--text-muted)",
-                          }}
+                          className="text-[9px] ml-0.5"
+                          style={{ color: "var(--text-muted)" }}
                         >
-                          {dueInfo.overdue ? "! " : ""}
-                          {dueInfo.label}
+                          {progress.step}/{progress.total}
                         </span>
-                      )}
+                      </div>
 
                       {task.assigned_user && (
                         <span
