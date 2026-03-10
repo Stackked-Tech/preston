@@ -426,7 +426,7 @@ export default function TimeClock() {
 
               <div className="space-y-3">
                 {(() => {
-                  const companyJobs = activeJobs.filter(j => j.company_id === matchedEmployee?.company_id && (!isSwitching || j.id !== openEntry?.job_id));
+                  const companyJobs = activeJobs.filter(j => !isSwitching || j.id !== openEntry?.job_id);
                   return (
                     <>
                       {companyJobs.map((job) => (
@@ -515,7 +515,7 @@ export default function TimeClock() {
                       Clock Out
                     </button>
 
-                    {activeJobs.filter(j => j.company_id === matchedEmployee?.company_id).length > 1 && (
+                    {activeJobs.length > 1 && (
                       <button
                         onClick={() => {
                           setIsSwitching(true);
