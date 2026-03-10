@@ -6,6 +6,8 @@ import { useTasks } from "@/lib/hospitalityHooks";
 import type { HMTaskStatus } from "@/types/hospitality";
 import TaskList from "./TaskList";
 import TaskDetail from "./TaskDetail";
+import TaskMap from "./TaskMap";
+import RouteOptimizer from "./RouteOptimizer";
 
 interface AuthUser {
   id: string;
@@ -15,7 +17,7 @@ interface AuthUser {
   role: "manager" | "staff";
 }
 
-type TabMode = "all" | "mine";
+type TabMode = "all" | "mine" | "map";
 
 export default function TaskBoard() {
   // Auth state
@@ -35,6 +37,9 @@ export default function TaskBoard() {
   const [viewMode, setViewMode] = useState<"list" | "detail">("list");
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [tabMode, setTabMode] = useState<TabMode>("all");
+
+  // Map state
+  const [routeGeometry, setRouteGeometry] = useState<GeoJSON.LineString | null>(null);
 
   // Filter state
   const [statusFilters, setStatusFilters] = useState<HMTaskStatus[]>([
@@ -466,8 +471,8 @@ export default function TaskBoard() {
       </header>
 
       {/* Content */}
-      <div className="flex-1 overflow-hidden pb-[60px]">
-        {viewMode === "list" ? (
+      <div className="flex-1 overflow-hidden pb-[60px] flex flex-col">
+        {viewMode === "list" && tabMode !== "map" ? (
           <TaskList
             tasks={filteredTasks}
             onSelectTask={handleSelectTask}
@@ -480,6 +485,19 @@ export default function TaskBoard() {
             onPriorityFilterChange={setPriorityFilter}
             properties={taskProperties}
           />
+        ) : viewMode === "list" && tabMode === "map" ? (
+          <>
+            <TaskMap
+              tasks={filteredTasks}
+              onSelectTask={handleSelectTask}
+              routeGeometry={routeGeometry}
+            />
+            <RouteOptimizer
+              tasks={filteredTasks}
+              onOptimizedRoute={() => {}}
+              onRouteGeometry={setRouteGeometry}
+            />
+          </>
         ) : selectedTaskId ? (
           <TaskDetail
             taskId={selectedTaskId}
@@ -544,6 +562,28 @@ export default function TaskBoard() {
               <circle cx="12" cy="7" r="4" />
             </svg>
             <span className="text-[10px] font-medium">My Tasks</span>
+          </button>
+          <button
+            onClick={() => { setTabMode("map"); setRouteGeometry(null); }}
+            className="flex-1 flex flex-col items-center justify-center gap-1 min-h-[60px]"
+            style={{
+              color: tabMode === "map" ? "var(--gold)" : "var(--text-muted)",
+            }}
+          >
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+              <circle cx="12" cy="10" r="3" />
+            </svg>
+            <span className="text-[10px] font-medium">Map</span>
           </button>
         </nav>
       )}

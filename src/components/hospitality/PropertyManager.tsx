@@ -206,8 +206,32 @@ function PropertyFormModal({ property, onSave, onUpdate, onClose }: PropertyForm
     notes: property?.notes ?? "",
   });
   const [saving, setSaving] = useState(false);
+  const [geocodeStatus, setGeocodeStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
 
   const canSubmit = form.name.trim() !== "";
+
+  const geocodeAddress = async (
+    address: string,
+    city: string,
+    state: string,
+    zip: string
+  ): Promise<{ lat: number; lng: number } | null> => {
+    try {
+      const res = await fetch("/api/hospitality/geocode", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ address, city, state, zip }),
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      if (data.lat != null && data.lng != null) {
+        return { lat: data.lat, lng: data.lng };
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  };
 
   const handleSubmit = async () => {
     if (!canSubmit || saving) return;
@@ -224,11 +248,40 @@ function PropertyFormModal({ property, onSave, onUpdate, onClose }: PropertyForm
         notes: form.notes.trim() || null,
         is_active: true,
       };
+
+      let savedId: string | undefined;
       if (isEditing && property) {
         await onUpdate(property.id, payload);
+        savedId = property.id;
       } else {
-        await onSave(payload);
+        const result = await onSave(payload);
+        savedId = (result as HMProperty | undefined)?.id;
       }
+
+      // Auto-geocode if address exists and lat/lng were not manually set
+      if (form.address.trim() && !form.lat && !form.lng && savedId) {
+        setGeocodeStatus("loading");
+        const coords = await geocodeAddress(
+          form.address.trim(),
+          form.city.trim(),
+          form.state.trim(),
+          form.zip.trim()
+        );
+        if (coords) {
+          await onUpdate(savedId, { lat: coords.lat, lng: coords.lng });
+          setForm((f) => ({
+            ...f,
+            lat: coords.lat.toString(),
+            lng: coords.lng.toString(),
+          }));
+          setGeocodeStatus("success");
+        } else {
+          setGeocodeStatus("error");
+        }
+        // Brief delay to show status before closing
+        await new Promise((r) => setTimeout(r, 1000));
+      }
+
       onClose();
     } catch (err) {
       console.error("Failed to save property:", err);
@@ -324,6 +377,18 @@ function PropertyFormModal({ property, onSave, onUpdate, onClose }: PropertyForm
             />
           </div>
         </div>
+
+        {geocodeStatus !== "idle" && (
+          <div className="mt-3 text-xs flex items-center gap-2" style={{
+            color: geocodeStatus === "success" ? "#4ade80"
+              : geocodeStatus === "error" ? "#f97316"
+              : "var(--text-muted)",
+          }}>
+            {geocodeStatus === "loading" && "Geocoding address..."}
+            {geocodeStatus === "success" && "Geocoded successfully"}
+            {geocodeStatus === "error" && "Could not geocode address"}
+          </div>
+        )}
 
         <div className="flex justify-end gap-2 mt-4">
           <button
