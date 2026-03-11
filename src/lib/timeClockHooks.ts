@@ -315,7 +315,7 @@ export function useTimeEntries() {
     );
   };
 
-  const updateEntry = async (entryId: string, updates: { clock_out?: string; notes?: string }): Promise<void> => {
+  const updateEntry = async (entryId: string, updates: { job_id?: string | null; clock_in?: string; clock_out?: string; notes?: string }): Promise<void> => {
     const { error } = await supabase
       .from("tc_time_entries")
       .update(updates)

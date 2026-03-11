@@ -247,6 +247,7 @@ export default function TimeClockAdmin() {
             onApprove={approveEntry}
             onFlag={flagEntry}
             onBulkApprove={bulkApprove}
+            onUpdateEntry={updateEntry}
           />
         )}
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import type { TCEmployee, TCTimeEntry, TCJob, TCCompany } from "@/types/timeclock";
 
 interface Props {
@@ -11,6 +11,7 @@ interface Props {
   onApprove: (entryId: string, approvedBy: string) => Promise<void>;
   onFlag: (entryId: string, flagNote: string) => Promise<void>;
   onBulkApprove: (entryIds: string[], approvedBy: string) => Promise<void>;
+  onUpdateEntry: (entryId: string, updates: { job_id?: string | null; clock_in?: string; clock_out?: string }) => Promise<void>;
 }
 
 function getHours(clockIn: string, clockOut: string | null): number {
@@ -25,6 +26,47 @@ function getYesterdayDate(): string {
   return d.toISOString().slice(0, 10);
 }
 
+/** Convert ISO datetime to HH:MM for time input */
+function toTimeValue(iso: string): string {
+  const d = new Date(iso);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+/** Apply a HH:MM time value to an existing ISO datetime, preserving the date */
+function applyTime(existingIso: string, timeStr: string): string {
+  const d = new Date(existingIso);
+  const [h, m] = timeStr.split(":").map(Number);
+  d.setHours(h, m, 0, 0);
+  return d.toISOString();
+}
+
+type EditingCell = { entryId: string; field: "job" | "clockIn" | "clockOut" | "hours" | "billable" } | null;
+
+/* ─── Inline Editable Cell Wrapper ─── */
+function EditableCell({
+  isEditing,
+  onClick,
+  children,
+  editContent,
+}: {
+  isEditing: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+  editContent: React.ReactNode;
+}) {
+  if (isEditing) return <>{editContent}</>;
+  return (
+    <span
+      onClick={onClick}
+      className="cursor-pointer hover:underline decoration-dotted underline-offset-2"
+      style={{ textDecorationColor: "var(--text-muted)" }}
+      title="Click to edit"
+    >
+      {children}
+    </span>
+  );
+}
+
 export default function ApprovalQueue({
   entries,
   employees,
@@ -33,12 +75,23 @@ export default function ApprovalQueue({
   onApprove,
   onFlag,
   onBulkApprove,
+  onUpdateEntry,
 }: Props) {
   const [selectedDate, setSelectedDate] = useState(getYesterdayDate);
   const [approverName] = useState("Brian");
   const [flagModalEntryId, setFlagModalEntryId] = useState<string | null>(null);
   const [flagReason, setFlagReason] = useState("");
   const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set());
+  const [editing, setEditing] = useState<EditingCell>(null);
+  const [editValue, setEditValue] = useState("");
+  const inputRef = useRef<HTMLInputElement | HTMLSelectElement | null>(null);
+
+  // Auto-focus when editing starts
+  useEffect(() => {
+    if (editing && inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, [editing]);
 
   // Build lookup maps
   const employeeMap = useMemo(() => {
@@ -143,6 +196,278 @@ export default function ApprovalQueue({
     }
   };
 
+  /* ─── Inline Edit Handlers ─── */
+
+  const startEdit = (entryId: string, field: EditingCell extends null ? never : NonNullable<EditingCell>["field"], currentValue: string) => {
+    setEditing({ entryId, field });
+    setEditValue(currentValue);
+  };
+
+  const cancelEdit = () => {
+    setEditing(null);
+    setEditValue("");
+  };
+
+  const saveEdit = async (entry: TCTimeEntry) => {
+    if (!editing) return;
+    const { field } = editing;
+
+    try {
+      if (field === "job") {
+        const newJobId = editValue === "" ? null : editValue;
+        if (newJobId !== entry.job_id) {
+          await onUpdateEntry(entry.id, { job_id: newJobId });
+        }
+      } else if (field === "clockIn") {
+        const newClockIn = applyTime(entry.clock_in, editValue);
+        if (newClockIn !== entry.clock_in) {
+          await onUpdateEntry(entry.id, { clock_in: newClockIn });
+        }
+      } else if (field === "clockOut") {
+        if (entry.clock_out) {
+          const newClockOut = applyTime(entry.clock_out, editValue);
+          if (newClockOut !== entry.clock_out) {
+            await onUpdateEntry(entry.id, { clock_out: newClockOut });
+          }
+        }
+      } else if (field === "hours") {
+        // Adjust clock_out based on entered hours
+        const newHours = parseFloat(editValue);
+        if (!isNaN(newHours) && newHours > 0) {
+          const start = new Date(entry.clock_in).getTime();
+          const newClockOut = new Date(start + newHours * 60 * 60 * 1000).toISOString();
+          await onUpdateEntry(entry.id, { clock_out: newClockOut });
+        }
+      } else if (field === "billable") {
+        // Reverse-compute hours from billable amount, then adjust clock_out
+        const emp = employeeMap.get(entry.employee_id);
+        const rate = emp?.billable_rate || 0;
+        if (rate > 0) {
+          const newBillable = parseFloat(editValue);
+          if (!isNaN(newBillable) && newBillable >= 0) {
+            const newHours = newBillable / rate;
+            const start = new Date(entry.clock_in).getTime();
+            const newClockOut = new Date(start + newHours * 60 * 60 * 1000).toISOString();
+            await onUpdateEntry(entry.id, { clock_out: newClockOut });
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Failed to update entry:", err);
+    }
+    cancelEdit();
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent, entry: TCTimeEntry) => {
+    if (e.key === "Enter") saveEdit(entry);
+    if (e.key === "Escape") cancelEdit();
+  };
+
+  /* ─── Shared input style ─── */
+  const inlineInputStyle: React.CSSProperties = {
+    background: "var(--input-bg)",
+    borderColor: "var(--gold)",
+    color: "var(--text-primary)",
+    boxShadow: "0 0 0 1px var(--gold)",
+  };
+
+  /* ─── Render an entry row (used for both pending and flagged) ─── */
+  const renderEntryRow = (entry: TCTimeEntry, showActions: boolean) => {
+    const emp = employeeMap.get(entry.employee_id);
+    const job = entry.job_id ? jobMap.get(entry.job_id) : null;
+    const hours = getHours(entry.clock_in, entry.clock_out);
+    const billable = hours * (emp?.billable_rate || 0);
+    const isLoading = loadingIds.has(entry.id);
+    const isEditing = (field: string) => editing?.entryId === entry.id && editing?.field === field;
+
+    return (
+      <tr key={entry.id} style={{ borderBottom: "1px solid var(--border-light)" }}>
+        {/* Resource # — read-only */}
+        <td className="py-3 px-3 font-mono text-xs" style={{ color: "var(--gold)" }}>
+          {emp?.employee_number || "\u2014"}
+        </td>
+
+        {/* Name — read-only */}
+        <td className="py-3 px-3" style={{ color: "var(--text-primary)" }}>
+          {emp ? `${emp.first_name} ${emp.last_name}` : "Unknown"}
+        </td>
+
+        {/* Job — dropdown */}
+        <td className="py-3 px-3 text-xs" style={{ color: job ? "var(--text-secondary)" : "var(--text-muted)" }}>
+          <EditableCell
+            isEditing={isEditing("job")}
+            onClick={() => startEdit(entry.id, "job", entry.job_id || "")}
+            editContent={
+              <select
+                ref={(el) => { inputRef.current = el; }}
+                value={editValue}
+                onChange={(e) => {
+                  setEditValue(e.target.value);
+                  // Auto-save on select
+                  const newJobId = e.target.value === "" ? null : e.target.value;
+                  if (newJobId !== entry.job_id) {
+                    onUpdateEntry(entry.id, { job_id: newJobId }).catch(console.error);
+                  }
+                  cancelEdit();
+                }}
+                onBlur={() => cancelEdit()}
+                className="px-1.5 py-0.5 border rounded text-xs font-sans outline-none w-full max-w-[120px]"
+                style={inlineInputStyle}
+              >
+                <option value="">\u2014 None</option>
+                {jobs.map((j) => (
+                  <option key={j.id} value={j.id}>{j.name}</option>
+                ))}
+              </select>
+            }
+          >
+            {job?.name || "\u2014"}
+          </EditableCell>
+        </td>
+
+        {/* Clock In — time input */}
+        <td className="py-3 px-3 text-xs" style={{ color: "var(--text-secondary)" }}>
+          <EditableCell
+            isEditing={isEditing("clockIn")}
+            onClick={() => startEdit(entry.id, "clockIn", toTimeValue(entry.clock_in))}
+            editContent={
+              <input
+                ref={(el) => { inputRef.current = el; }}
+                type="time"
+                value={editValue}
+                onChange={(e) => setEditValue(e.target.value)}
+                onBlur={() => saveEdit(entry)}
+                onKeyDown={(e) => handleKeyDown(e, entry)}
+                className="px-1.5 py-0.5 border rounded text-xs font-sans outline-none w-[100px]"
+                style={inlineInputStyle}
+              />
+            }
+          >
+            {new Date(entry.clock_in).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+          </EditableCell>
+        </td>
+
+        {/* Clock Out — time input */}
+        <td className="py-3 px-3 text-xs">
+          {entry.clock_out ? (
+            <EditableCell
+              isEditing={isEditing("clockOut")}
+              onClick={() => startEdit(entry.id, "clockOut", toTimeValue(entry.clock_out!))}
+              editContent={
+                <input
+                  ref={(el) => { inputRef.current = el; }}
+                  type="time"
+                  value={editValue}
+                  onChange={(e) => setEditValue(e.target.value)}
+                  onBlur={() => saveEdit(entry)}
+                  onKeyDown={(e) => handleKeyDown(e, entry)}
+                  className="px-1.5 py-0.5 border rounded text-xs font-sans outline-none w-[100px]"
+                  style={inlineInputStyle}
+                />
+              }
+            >
+              <span style={{ color: "var(--text-secondary)" }}>
+                {new Date(entry.clock_out).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+              </span>
+            </EditableCell>
+          ) : (
+            <span style={{ color: "#66bb6a" }}>Active</span>
+          )}
+        </td>
+
+        {/* Hours — editable number (adjusts clock_out) */}
+        <td className="py-3 px-3 font-mono text-xs" style={{ color: "var(--text-primary)" }}>
+          <EditableCell
+            isEditing={isEditing("hours")}
+            onClick={() => startEdit(entry.id, "hours", hours.toFixed(2))}
+            editContent={
+              <input
+                ref={(el) => { inputRef.current = el; }}
+                type="number"
+                step="0.25"
+                min="0"
+                value={editValue}
+                onChange={(e) => setEditValue(e.target.value)}
+                onBlur={() => saveEdit(entry)}
+                onKeyDown={(e) => handleKeyDown(e, entry)}
+                className="px-1.5 py-0.5 border rounded text-xs font-mono outline-none w-[70px]"
+                style={inlineInputStyle}
+              />
+            }
+          >
+            {hours.toFixed(2)}h
+          </EditableCell>
+        </td>
+
+        {/* Billable — editable number (reverse-computes hours from rate) */}
+        <td className="py-3 px-3 font-mono text-xs" style={{ color: "var(--gold)" }}>
+          <EditableCell
+            isEditing={isEditing("billable")}
+            onClick={() => startEdit(entry.id, "billable", billable.toFixed(2))}
+            editContent={
+              <div className="flex items-center">
+                <span className="text-xs mr-0.5" style={{ color: "var(--gold)" }}>$</span>
+                <input
+                  ref={(el) => { inputRef.current = el; }}
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={editValue}
+                  onChange={(e) => setEditValue(e.target.value)}
+                  onBlur={() => saveEdit(entry)}
+                  onKeyDown={(e) => handleKeyDown(e, entry)}
+                  className="px-1.5 py-0.5 border rounded text-xs font-mono outline-none w-[70px]"
+                  style={inlineInputStyle}
+                />
+              </div>
+            }
+          >
+            ${billable.toFixed(2)}
+          </EditableCell>
+        </td>
+
+        {/* Actions */}
+        {showActions ? (
+          <td className="py-3 px-3">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => handleApprove(entry.id)}
+                disabled={isLoading}
+                className="text-[10px] font-sans font-medium uppercase tracking-[1px] px-2.5 py-1 rounded border transition-all disabled:opacity-40"
+                style={{
+                  borderColor: "rgba(102,187,106,0.3)",
+                  background: "rgba(102,187,106,0.1)",
+                  color: "#66bb6a",
+                }}
+              >
+                Approve
+              </button>
+              <button
+                onClick={() => {
+                  setFlagModalEntryId(entry.id);
+                  setFlagReason("");
+                }}
+                disabled={isLoading}
+                className="text-[10px] font-sans font-medium uppercase tracking-[1px] px-2.5 py-1 rounded border transition-all disabled:opacity-40"
+                style={{
+                  borderColor: "rgba(255,183,77,0.3)",
+                  background: "rgba(255,183,77,0.1)",
+                  color: "#ffb74d",
+                }}
+              >
+                Flag
+              </button>
+            </div>
+          </td>
+        ) : (
+          <td className="py-3 px-3 text-xs" style={{ color: "#ffb74d" }}>
+            {entry.flag_note || "\u2014"}
+          </td>
+        )}
+      </tr>
+    );
+  };
+
   return (
     <div className="max-w-5xl">
       {/* Header */}
@@ -243,109 +568,7 @@ export default function ApprovalQueue({
                 </tr>
               </thead>
               <tbody>
-                {groupEntries.map((entry) => {
-                  const emp = employeeMap.get(entry.employee_id);
-                  const job = entry.job_id ? jobMap.get(entry.job_id) : null;
-                  const hours = getHours(entry.clock_in, entry.clock_out);
-                  const billable = hours * (emp?.billable_rate || 0);
-                  const isLoading = loadingIds.has(entry.id);
-
-                  return (
-                    <tr
-                      key={entry.id}
-                      style={{ borderBottom: "1px solid var(--border-light)" }}
-                    >
-                      <td
-                        className="py-3 px-3 font-mono text-xs"
-                        style={{ color: "var(--gold)" }}
-                      >
-                        {emp?.employee_number || "—"}
-                      </td>
-                      <td
-                        className="py-3 px-3"
-                        style={{ color: "var(--text-primary)" }}
-                      >
-                        {emp
-                          ? `${emp.first_name} ${emp.last_name}`
-                          : "Unknown"}
-                      </td>
-                      <td
-                        className="py-3 px-3 text-xs"
-                        style={{
-                          color: job
-                            ? "var(--text-secondary)"
-                            : "var(--text-muted)",
-                        }}
-                      >
-                        {job?.name || "\u2014"}
-                      </td>
-                      <td
-                        className="py-3 px-3 text-xs"
-                        style={{ color: "var(--text-secondary)" }}
-                      >
-                        {new Date(entry.clock_in).toLocaleTimeString([], {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </td>
-                      <td className="py-3 px-3 text-xs">
-                        {entry.clock_out ? (
-                          <span style={{ color: "var(--text-secondary)" }}>
-                            {new Date(entry.clock_out).toLocaleTimeString([], {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
-                          </span>
-                        ) : (
-                          <span style={{ color: "#66bb6a" }}>Active</span>
-                        )}
-                      </td>
-                      <td
-                        className="py-3 px-3 font-mono text-xs"
-                        style={{ color: "var(--text-primary)" }}
-                      >
-                        {hours.toFixed(2)}h
-                      </td>
-                      <td
-                        className="py-3 px-3 font-mono text-xs"
-                        style={{ color: "var(--gold)" }}
-                      >
-                        ${billable.toFixed(2)}
-                      </td>
-                      <td className="py-3 px-3">
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => handleApprove(entry.id)}
-                            disabled={isLoading}
-                            className="text-[10px] font-sans font-medium uppercase tracking-[1px] px-2.5 py-1 rounded border transition-all disabled:opacity-40"
-                            style={{
-                              borderColor: "rgba(102,187,106,0.3)",
-                              background: "rgba(102,187,106,0.1)",
-                              color: "#66bb6a",
-                            }}
-                          >
-                            Approve
-                          </button>
-                          <button
-                            onClick={() => {
-                              setFlagModalEntryId(entry.id);
-                              setFlagReason("");
-                            }}
-                            disabled={isLoading}
-                            className="text-[10px] font-sans font-medium uppercase tracking-[1px] px-2.5 py-1 rounded border transition-all disabled:opacity-40"
-                            style={{
-                              borderColor: "rgba(255,183,77,0.3)",
-                              background: "rgba(255,183,77,0.1)",
-                              color: "#ffb74d",
-                            }}
-                          >
-                            Flag
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
+                {groupEntries.map((entry) => renderEntryRow(entry, true))}
               </tbody>
             </table>
           </div>
@@ -374,7 +597,7 @@ export default function ApprovalQueue({
           >
             <thead>
               <tr style={{ borderBottom: "1px solid var(--border-color)" }}>
-                {["Resource #", "Name", "Job", "Clock In", "Clock Out", "Hours", "Flag Note"].map(
+                {["Resource #", "Name", "Job", "Clock In", "Clock Out", "Hours", "Billable", "Flag Note"].map(
                   (h) => (
                     <th
                       key={h}
@@ -388,76 +611,7 @@ export default function ApprovalQueue({
               </tr>
             </thead>
             <tbody>
-              {flaggedEntries.map((entry) => {
-                const emp = employeeMap.get(entry.employee_id);
-                const job = entry.job_id ? jobMap.get(entry.job_id) : null;
-                const hours = getHours(entry.clock_in, entry.clock_out);
-
-                return (
-                  <tr
-                    key={entry.id}
-                    style={{ borderBottom: "1px solid var(--border-light)" }}
-                  >
-                    <td
-                      className="py-3 px-3 font-mono text-xs"
-                      style={{ color: "var(--gold)" }}
-                    >
-                      {emp?.employee_number || "—"}
-                    </td>
-                    <td
-                      className="py-3 px-3"
-                      style={{ color: "var(--text-primary)" }}
-                    >
-                      {emp
-                        ? `${emp.first_name} ${emp.last_name}`
-                        : "Unknown"}
-                    </td>
-                    <td
-                      className="py-3 px-3 text-xs"
-                      style={{
-                        color: job
-                          ? "var(--text-secondary)"
-                          : "var(--text-muted)",
-                      }}
-                    >
-                      {job?.name || "\u2014"}
-                    </td>
-                    <td
-                      className="py-3 px-3 text-xs"
-                      style={{ color: "var(--text-secondary)" }}
-                    >
-                      {new Date(entry.clock_in).toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </td>
-                    <td className="py-3 px-3 text-xs">
-                      {entry.clock_out ? (
-                        <span style={{ color: "var(--text-secondary)" }}>
-                          {new Date(entry.clock_out).toLocaleTimeString([], {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </span>
-                      ) : (
-                        <span style={{ color: "#66bb6a" }}>Active</span>
-                      )}
-                    </td>
-                    <td
-                      className="py-3 px-3 font-mono text-xs"
-                      style={{ color: "var(--text-primary)" }}
-                    >
-                      {hours.toFixed(2)}h
-                    </td>
-                    <td
-                      className="py-3 px-3 text-xs"
-                      style={{ color: "#ffb74d" }}
-                    >
-                      {entry.flag_note || "—"}
-                    </td>
-                  </tr>
-                );
-              })}
+              {flaggedEntries.map((entry) => renderEntryRow(entry, false))}
             </tbody>
           </table>
         </div>
