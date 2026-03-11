@@ -1,11 +1,63 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import Link from "next/link";
 import { useTheme } from "@/lib/theme";
 import { useEmployees, useTimeEntries, useJobs, useCompanies } from "@/lib/timeClockHooks";
+import type { TCTimeEntry } from "@/types/timeclock";
 
 type Screen = "input" | "confirm" | "select-job" | "action";
+
+const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"] as const;
+
+/** Get Mon 00:00 and Sun 23:59 for the week containing `date` */
+function getWeekBounds(date: Date): { weekStart: Date; weekEnd: Date } {
+  const d = new Date(date);
+  const day = d.getDay(); // 0=Sun … 6=Sat
+  const diffToMon = day === 0 ? -6 : 1 - day;
+  const weekStart = new Date(d);
+  weekStart.setDate(d.getDate() + diffToMon);
+  weekStart.setHours(0, 0, 0, 0);
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekStart.getDate() + 6);
+  weekEnd.setHours(23, 59, 59, 999);
+  return { weekStart, weekEnd };
+}
+
+/** Build per-day hours for the current Mon–Sun week */
+function getWeeklySummary(
+  entries: TCTimeEntry[],
+  employeeId: string,
+): { day: string; date: string; hours: number }[] {
+  const { weekStart, weekEnd } = getWeekBounds(new Date());
+
+  const empEntries = entries.filter((e) => {
+    if (e.employee_id !== employeeId) return false;
+    const clockIn = new Date(e.clock_in);
+    return clockIn >= weekStart && clockIn <= weekEnd;
+  });
+
+  // Accumulate hours per day-of-week (0=Mon … 6=Sun)
+  const hoursPerDay = new Array(7).fill(0);
+  for (const entry of empEntries) {
+    const start = new Date(entry.clock_in);
+    const end = entry.clock_out ? new Date(entry.clock_out) : new Date();
+    const hrs = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
+    const jsDay = start.getDay(); // 0=Sun
+    const idx = jsDay === 0 ? 6 : jsDay - 1; // Convert to 0=Mon
+    hoursPerDay[idx] += hrs;
+  }
+
+  return DAY_NAMES.map((day, idx) => {
+    const d = new Date(weekStart);
+    d.setDate(weekStart.getDate() + idx);
+    return {
+      day,
+      date: `${d.getMonth() + 1}/${d.getDate()}`,
+      hours: hoursPerDay[idx],
+    };
+  });
+}
 
 export default function TimeClock() {
   const { theme, toggleTheme } = useTheme();
@@ -188,6 +240,17 @@ export default function TimeClock() {
     const m = totalMin % 60;
     return `${h}h ${m}m`;
   };
+
+  // Weekly summary for the matched employee
+  const weeklySummary = useMemo(() => {
+    if (!matchedEmployee) return null;
+    return getWeeklySummary(entries, matchedEmployee.id);
+  }, [entries, matchedEmployee]);
+
+  const weeklyTotal = useMemo(() => {
+    if (!weeklySummary) return 0;
+    return weeklySummary.reduce((sum, d) => sum + d.hours, 0);
+  }, [weeklySummary]);
 
   const loading = empLoading || entLoading || jobsLoading;
   const [loadingTimedOut, setLoadingTimedOut] = useState(false);
@@ -535,17 +598,81 @@ export default function TimeClock() {
                   </div>
                 </>
               ) : (
-                <button
-                  onClick={handleClockIn}
-                  className="w-full py-6 rounded-xl text-2xl font-sans font-bold uppercase tracking-[3px] transition-all active:scale-95 border-2 mt-4"
-                  style={{
-                    background: "rgba(102,187,106,0.15)",
-                    borderColor: "#66bb6a",
-                    color: "#66bb6a",
-                  }}
-                >
-                  Clock In
-                </button>
+                <>
+                  {/* Weekly Hours Summary */}
+                  {weeklySummary && (
+                    <div
+                      className="rounded-xl border mb-5 mt-2 overflow-hidden"
+                      style={{ borderColor: "var(--border-color)" }}
+                    >
+                      <div
+                        className="px-4 py-2"
+                        style={{ borderBottom: "1px solid var(--border-light)" }}
+                      >
+                        <p
+                          className="text-[10px] font-sans uppercase tracking-[2px] font-medium"
+                          style={{ color: "var(--text-muted)" }}
+                        >
+                          This Week
+                        </p>
+                      </div>
+                      {weeklySummary.map(({ day, date, hours }) => (
+                        <div
+                          key={day}
+                          className="flex items-center justify-between px-4 py-1.5"
+                          style={{ borderBottom: "1px solid var(--border-light)" }}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span
+                              className="text-xs font-sans"
+                              style={{ color: hours > 0 ? "var(--text-primary)" : "var(--text-muted)" }}
+                            >
+                              {day}
+                            </span>
+                            <span className="text-[10px] font-sans" style={{ color: "var(--text-muted)" }}>
+                              {date}
+                            </span>
+                          </div>
+                          <span
+                            className="text-xs font-mono"
+                            style={{ color: hours > 0 ? "var(--text-primary)" : "var(--text-muted)" }}
+                          >
+                            {hours > 0 ? `${hours.toFixed(1)}h` : "\u2014"}
+                          </span>
+                        </div>
+                      ))}
+                      <div
+                        className="flex items-center justify-between px-4 py-2"
+                        style={{ background: "rgba(212,175,55,0.06)" }}
+                      >
+                        <span
+                          className="text-xs font-sans font-medium uppercase tracking-[1px]"
+                          style={{ color: "var(--gold)" }}
+                        >
+                          Total
+                        </span>
+                        <span
+                          className="text-sm font-mono font-medium"
+                          style={{ color: "var(--gold)" }}
+                        >
+                          {weeklyTotal.toFixed(1)}h
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  <button
+                    onClick={handleClockIn}
+                    className="w-full py-6 rounded-xl text-2xl font-sans font-bold uppercase tracking-[3px] transition-all active:scale-95 border-2"
+                    style={{
+                      background: "rgba(102,187,106,0.15)",
+                      borderColor: "#66bb6a",
+                      color: "#66bb6a",
+                    }}
+                  >
+                    Clock In
+                  </button>
+                </>
               )}
 
               <button
