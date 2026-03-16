@@ -420,8 +420,8 @@ export function processCSV(
   // Round all values to 2 decimal places
   for (const name of Object.keys(staffData)) {
     const d = staffData[name];
-    d.productWk1 = Math.round(d.productWk1 * 100) / 100;
-    d.productWk2 = Math.round(d.productWk2 * 100) / 100;
+    d.productWk1 = Math.max(0, Math.round(d.productWk1 * 100) / 100);
+    d.productWk2 = Math.max(0, Math.round(d.productWk2 * 100) / 100);
     d.contractorService = Math.round(d.contractorService * 100) / 100;
     d.associatePay = Math.round(d.associatePay * 100) / 100;
     d.tips = Math.round(d.tips * 100) / 100;
