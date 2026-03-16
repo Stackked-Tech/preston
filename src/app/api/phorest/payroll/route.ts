@@ -174,6 +174,9 @@ export async function POST(request: NextRequest) {
       excelBase64,
       filePath,
       totalRows: completedJob.totalRows,
+      subsidiaryId: payPeriod.subsidiaryId,
+      account: payPeriod.account,
+      postingPeriod: payPeriod.postingPeriod,
     });
   } catch (error) {
     console.error("Payroll processing error:", error);

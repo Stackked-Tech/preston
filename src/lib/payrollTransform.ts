@@ -41,6 +41,7 @@ interface PhorestRow {
   item_type?: string;
   transaction_id?: string;
   purchased_date?: string;
+  purchase_time?: string;
   total_amount?: string;
   unit_price?: string;
   client_source?: string;
@@ -149,6 +150,9 @@ export function processCSV(
     txnPaymentCodes.set(tid, codes);
   }
 
+  // Track new-guest service candidates: clientKey → { staffName, unitPrice, purchaseTime }[]
+  const newGuestCandidates = new Map<string, { staffName: string; unitPrice: number; purchaseTime: string }[]>();
+
   for (const row of parsed.data) {
     const staffFirst = (row.staff_first_name || "").trim();
     const staffLast = (row.staff_last_name || "").trim();
@@ -203,7 +207,7 @@ export function processCSV(
       }
     }
 
-    // ── New Guests ──
+    // ── New Guests (collect candidates — resolve after loop) ──
     if (itemType === "SERVICE" && isKnownStaff) {
       const clientSource = (row.client_source || "").trim();
       const clientFirstVisit = parseDate(row.client_first_visit);
@@ -214,7 +218,13 @@ export function processCSV(
         clientFirstVisit <= periodEnd
       ) {
         const unitPrice = parseFloat(row.unit_price || "0") || 0;
-        staffData[staffName].newGuests += unitPrice;
+        const purchaseTime = (row.purchase_time || "99:99:99").trim();
+        const clientKey = `${(row.client_first_name || "").trim()} ${(row.client_last_name || "").trim()}|${clientFirstVisit}`;
+
+        if (!newGuestCandidates.has(clientKey)) {
+          newGuestCandidates.set(clientKey, []);
+        }
+        newGuestCandidates.get(clientKey)!.push({ staffName, unitPrice, purchaseTime });
       }
     }
 
@@ -257,6 +267,38 @@ export function processCSV(
               (empPurchasesByClient[clientName] || 0) + amount;
           }
         }
+      }
+    }
+  }
+
+  // ── Resolve new-guest candidates: credit only the earliest stylist per client ──
+  for (const [clientKey, candidates] of newGuestCandidates) {
+    // Sort by purchase_time ascending, then staff name for deterministic tie-breaking
+    candidates.sort((a, b) => {
+      const timeCmp = a.purchaseTime.localeCompare(b.purchaseTime);
+      if (timeCmp !== 0) return timeCmp;
+      return a.staffName.localeCompare(b.staffName);
+    });
+
+    // The earliest stylist gets ALL the new-guest credit for this client
+    const winner = candidates[0].staffName;
+    const totalUnitPrice = candidates
+      .filter((c) => c.staffName === winner)
+      .reduce((sum, c) => sum + c.unitPrice, 0);
+
+    if (staffData[winner]) {
+      staffData[winner].newGuests += totalUnitPrice;
+    }
+
+    // Warn if multiple stylists had the exact same timestamp
+    const uniqueStylists = new Set(candidates.map((c) => c.staffName));
+    if (uniqueStylists.size > 1) {
+      const [clientName] = clientKey.split("|");
+      const tiedStylists = candidates.filter((c) => c.purchaseTime === candidates[0].purchaseTime).map((c) => c.staffName);
+      if (new Set(tiedStylists).size > 1) {
+        warnings.push(
+          `New guest "${clientName}" had same timestamp for ${[...new Set(tiedStylists)].join(" & ")} — credited ${winner} (alphabetical tie-break)`
+        );
       }
     }
   }

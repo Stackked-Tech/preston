@@ -14,6 +14,114 @@ const MONTH_ABBREVS = [
   "JUL", "AUG", "SEP", "OCT", "NOV", "DEC",
 ];
 
+// ── Header Row 1 ──
+const HEADERS_R1 = [
+  "",
+  "",
+  "",
+  "",
+  "Product Sales",
+  "",
+  "Product Sales",
+  "Booth Rent",
+  "(GL 7140)",
+  "(GL 7150)",
+  "(GL 7170)",
+  "(GL 7180)",
+  "Total",
+  "(GL 4020)",
+  "(GL 4030)",
+  "(GL 4045)",
+  "Credit Card Amount",
+  "(GL 4040)",
+  "New Guests",
+  "(GL 4060)",
+  "(GL 4070)",
+  "(GL 4080)",
+  "(GL 4090)",
+  "(GL 4120)",
+  "Misc. Fees",
+  "Total",
+  "Account",
+  "Posting Period",
+  "Reference #",
+  "Due Date",
+  "Approval Status\n(Approved/\nPending)",
+  "",
+];
+
+// ── Header Row 2 ──
+const HEADERS_R2 = [
+  "",
+  "",
+  "",
+  "",
+  "(wk 1)",
+  "Booth Rent",
+  "(wk 2)",
+  "Rebate (wk 2)",
+  "Booth Rent",
+  "Tips",
+  "Contractor",
+  "Associate",
+  "Earned",
+  "Station",
+  "Financial",
+  "Color",
+  "",
+  "Credit Card",
+  "",
+  "Finders",
+  "Employee",
+  "Phorest",
+  "Refreshment",
+  "Associate",
+  "",
+  "check",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+];
+
+// ── Header Row 3 ──
+const HEADERS_R3 = [
+  "Subsidiary ID",
+  "Internal ID",
+  "First Names",
+  "Last Name",
+  "",
+  "Rebate (wk 1)",
+  "",
+  "",
+  "Rebate Total",
+  "",
+  "Service",
+  "Pay",
+  "",
+  "Lease",
+  "Services",
+  "Charges",
+  "",
+  "Charges 3%",
+  "",
+  "Fee 20%",
+  "Purchases",
+  "",
+  "",
+  "Fee",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "Pay Period",
+];
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // EXCEL GENERATION
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -29,117 +137,9 @@ export async function generatePayrollExcel(
   const { staffConfig } = branch;
   const { staffData, staffOrder } = results;
 
-  // ── Header Row 1 ──
-  const headersR1 = [
-    "",
-    "",
-    "",
-    "",
-    "Product Sales",
-    "",
-    "Product Sales",
-    "Booth Rent",
-    "(GL 7140)",
-    "(GL 7150)",
-    "(GL 7170)",
-    "(GL 7180)",
-    "Total",
-    "(GL 4020)",
-    "(GL 4030)",
-    "(GL 4045)",
-    "Credit Card Amount",
-    "(GL 4040)",
-    "New Guests",
-    "(GL 4060)",
-    "(GL 4070)",
-    "(GL 4080)",
-    "(GL 4090)",
-    "(GL 4120)",
-    "Misc. Fees",
-    "Total",
-    "Account",
-    "Posting Period",
-    "Reference #",
-    "Due Date",
-    "Approval Status\n(Approved/\nPending)",
-    "",
-  ];
-
-  // ── Header Row 2 ──
-  const headersR2 = [
-    "",
-    "",
-    "",
-    "",
-    "(wk 1)",
-    "Booth Rent",
-    "(wk 2)",
-    "Rebate (wk 2)",
-    "Booth Rent",
-    "Tips",
-    "Contractor",
-    "Associate",
-    "Earned",
-    "Station",
-    "Financial",
-    "Color",
-    "",
-    "Credit Card",
-    "",
-    "Finders",
-    "Employee",
-    "Phorest",
-    "Refreshment",
-    "Associate",
-    "",
-    "check",
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-  ];
-
-  // ── Header Row 3 ──
-  const headersR3 = [
-    "Subsidiary ID",
-    "Internal ID",
-    "First Names",
-    "Last Name",
-    "",
-    "Rebate (wk 1)",
-    "",
-    "",
-    "Rebate Total",
-    "",
-    "Service",
-    "Pay",
-    "",
-    "Lease",
-    "Services",
-    "Charges",
-    "",
-    "Charges 3%",
-    "",
-    "Fee 20%",
-    "Purchases",
-    "",
-    "",
-    "Fee",
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-    "Pay Period",
-  ];
-
-  ws.getRow(1).values = headersR1;
-  ws.getRow(2).values = headersR2;
-  ws.getRow(3).values = headersR3;
+  ws.getRow(1).values = HEADERS_R1;
+  ws.getRow(2).values = HEADERS_R2;
+  ws.getRow(3).values = HEADERS_R3;
 
   // Format pay date for Reference # column
   const payDateObj = new Date(payPeriod.payDate + "T12:00:00");
@@ -326,4 +326,147 @@ export async function generatePayrollExcel(
   // Write to buffer
   const buffer = await wb.xlsx.writeBuffer();
   return Buffer.from(buffer);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// CLIENT-SIDE EXCEL GENERATION (from pre-computed row values with overrides)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export interface FinalPayrollRow {
+  subsidiaryId: number;
+  internalId: number;
+  targetFirst: string;
+  targetLast: string;
+  productWk1: number;
+  productWk2: number;
+  tips: number;
+  contractorService: number;
+  associatePay: number;
+  stationLease: number;
+  financialServices: number;
+  colorCharges: number;
+  creditCardAmount: number;
+  newGuests: number;
+  employeePurchases: number;
+  phorestFee: number;
+  refreshment: number;
+  associateFee: number;
+  miscFees: number;
+}
+
+export async function generatePayrollExcelFromRows(
+  rows: FinalPayrollRow[],
+  meta: {
+    abbreviation: string;
+    payPeriodLabel: string;
+    payDate: string;
+    postingPeriod: string;
+    account: number;
+    subsidiaryId: number;
+  }
+): Promise<Uint8Array> {
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet("Sheet1");
+
+  ws.getRow(1).values = HEADERS_R1;
+  ws.getRow(2).values = HEADERS_R2;
+  ws.getRow(3).values = HEADERS_R3;
+
+  const payDateObj = new Date(meta.payDate + "T12:00:00");
+  const payDateRef = `ACH ${payDateObj.getMonth() + 1}.${payDateObj.getDate()}.${payDateObj.getFullYear()}`;
+  const [ppYear, ppMonth] = meta.postingPeriod.split("-");
+  const postingStr = `${MONTH_ABBREVS[parseInt(ppMonth, 10) - 1]}-${ppYear.slice(2)}`;
+
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+    const row = 4 + i;
+    const wsRow = ws.getRow(row);
+
+    // A: Subsidiary ID
+    wsRow.getCell(1).value = r.subsidiaryId;
+    // B: Internal ID
+    wsRow.getCell(2).value = r.internalId;
+    // C: First Name
+    wsRow.getCell(3).value = r.targetFirst;
+    // D: Last Name
+    wsRow.getCell(4).value = r.targetLast;
+    // E: Product Sales (wk 1)
+    wsRow.getCell(5).value = r.productWk1 || null;
+    // F: Booth Rent Rebate (wk 1) — FORMULA
+    wsRow.getCell(6).value = { formula: `ROUND(IF(E${row}>250,0.2,IF(E${row}>149,0.15,IF(E${row}>49,0.1,0)))*E${row},2)` } as ExcelJS.CellFormulaValue;
+    // G: Product Sales (wk 2)
+    wsRow.getCell(7).value = r.productWk2 || null;
+    // H: Booth Rent Rebate (wk 2) — FORMULA
+    wsRow.getCell(8).value = { formula: `ROUND(IF(G${row}>250,0.2,IF(G${row}>149,0.15,IF(G${row}>49,0.1,0)))*G${row},2)` } as ExcelJS.CellFormulaValue;
+    // I: Booth Rent Rebate Total — FORMULA
+    wsRow.getCell(9).value = { formula: `ROUND(F${row}+H${row},2)` } as ExcelJS.CellFormulaValue;
+    // J: Tips
+    wsRow.getCell(10).value = r.tips || null;
+    // K: Contractor Service
+    wsRow.getCell(11).value = r.contractorService || null;
+    // L: Associate Pay
+    wsRow.getCell(12).value = r.associatePay || null;
+    // M: Total Earned — FORMULA
+    wsRow.getCell(13).value = { formula: `ROUND(SUM(I${row}+J${row}+K${row}+L${row}),2)` } as ExcelJS.CellFormulaValue;
+    // N: Station Lease
+    wsRow.getCell(14).value = r.stationLease;
+    // O: Financial Services
+    wsRow.getCell(15).value = r.financialServices;
+    // P: Color Charges
+    wsRow.getCell(16).value = r.colorCharges || null;
+    // Q: Credit Card Amount
+    wsRow.getCell(17).value = r.creditCardAmount || null;
+    // R: Credit Card Charges 3% — FORMULA
+    wsRow.getCell(18).value = { formula: `ROUND(0.03*(-Q${row}),2)` } as ExcelJS.CellFormulaValue;
+    // S: New Guests
+    wsRow.getCell(19).value = r.newGuests || null;
+    // T: Finders Fee 20% — FORMULA
+    wsRow.getCell(20).value = { formula: `ROUND(0.2*(-S${row}),2)` } as ExcelJS.CellFormulaValue;
+    // U: Employee Purchases
+    wsRow.getCell(21).value = r.employeePurchases || null;
+    // V: Phorest
+    wsRow.getCell(22).value = r.phorestFee;
+    // W: Refreshment
+    wsRow.getCell(23).value = r.refreshment;
+    // X: Associate Fee
+    wsRow.getCell(24).value = r.associateFee || null;
+    // Y: Misc Fees
+    wsRow.getCell(25).value = r.miscFees || null;
+    // Z: Total Check — FORMULA
+    wsRow.getCell(26).value = { formula: `ROUND(M${row}+(N${row}+O${row}+P${row}+R${row}+T${row}+U${row}+V${row}+W${row}+X${row}+Y${row}),2)` } as ExcelJS.CellFormulaValue;
+    // AA: Account
+    wsRow.getCell(27).value = meta.account;
+    // AB: Posting Period
+    wsRow.getCell(28).value = postingStr;
+    // AC: Reference #
+    wsRow.getCell(29).value = payDateRef;
+    // AD: Due Date
+    wsRow.getCell(30).value = new Date(meta.payDate + "T12:00:00");
+    // AE: Approval Status
+    wsRow.getCell(31).value = "Approved";
+    // AF: Pay Period
+    wsRow.getCell(32).value = meta.payPeriodLabel;
+  }
+
+  // ── Footer Rows ──
+  const lastDataRow = 3 + rows.length;
+  const footerR1 = lastDataRow + 1;
+  const footerR2 = lastDataRow + 2;
+  const footerR3 = lastDataRow + 3;
+  const branchAbbrev = meta.abbreviation.split(" ").pop() || "01";
+  const footerLabel = `WHS ${branchAbbrev === "WHS" ? "01" : branchAbbrev.replace("WHS ", "")}`;
+
+  ws.getRow(footerR1).getCell(3).value = footerLabel;
+  ws.getRow(footerR1).getCell(25).value = "TOTAL PAYROLL:";
+  ws.getRow(footerR1).getCell(26).value = { formula: `ROUND(SUM(Z4:Z${lastDataRow}),2)` } as ExcelJS.CellFormulaValue;
+  ws.getRow(footerR2).getCell(3).value = "Pay Period:";
+  ws.getRow(footerR2).getCell(4).value = meta.payPeriodLabel;
+  ws.getRow(footerR2).getCell(25).value = "TOTAL EMP. W/DRAWL:";
+  ws.getRow(footerR3).getCell(3).value = "Pay Date:";
+  ws.getRow(footerR3).getCell(4).value = new Date(meta.payDate + "T12:00:00");
+  ws.getRow(footerR3).getCell(25).value = "TOTAL ACH:";
+  ws.getRow(footerR3).getCell(26).value = { formula: `ROUND(Z${footerR1}+Z${footerR2},2)` } as ExcelJS.CellFormulaValue;
+
+  const buffer = await wb.xlsx.writeBuffer();
+  return new Uint8Array(buffer);
 }

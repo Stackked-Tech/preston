@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import { useTheme } from "@/lib/theme";
 import Image from "next/image";
 import Link from "next/link";
@@ -12,6 +12,8 @@ import {
 } from "@/lib/payrollConfig";
 import type { BranchConfig, StaffMember } from "@/lib/payrollConfig";
 import type { StaffPayrollData } from "@/lib/payrollTransform";
+import { generatePayrollExcelFromRows } from "@/lib/payrollExcel";
+import type { FinalPayrollRow } from "@/lib/payrollExcel";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -31,7 +33,28 @@ interface BranchResult {
     warnings: string[];
     excelBase64: string;
     totalRows: number;
+    subsidiaryId: number;
+    account: number;
+    postingPeriod: string;
   };
+}
+
+/** Fields that Rachel can edit in the results table before downloading */
+interface PayrollOverrides {
+  productWk1?: number;
+  productWk2?: number;
+  tips?: number;
+  contractorService?: number;
+  associatePay?: number;
+  newGuests?: number;
+  employeePurchases?: number;
+  colorCharges?: number;
+  creditCardAmount?: number;
+  stationLease?: number;
+  financialServices?: number;
+  phorestFee?: number;
+  refreshment?: number;
+  miscFees?: number;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -571,13 +594,6 @@ function fmt(val: number | null | undefined): string {
   });
 }
 
-function fmtNeg(val: number | null | undefined): string {
-  if (val === null || val === undefined || val === 0) return "";
-  return val.toLocaleString("en-US", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-}
 
 interface ParsedRun {
   fileName: string;
@@ -622,6 +638,81 @@ function parseRunFilename(fileName: string): ParsedRun | null {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// EDITABLE CELL
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/** Inline-editable number cell. Shows formatted value; click to edit. */
+function EditableCell({
+  value,
+  originalValue,
+  onChange,
+  color,
+  style,
+}: {
+  value: number;
+  originalValue: number;
+  onChange: (val: number) => void;
+  color?: string;
+  style?: React.CSSProperties;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const isOverridden = value !== originalValue;
+
+  if (editing) {
+    return (
+      <td className="px-1 py-0.5" style={style}>
+        <input
+          autoFocus
+          type="number"
+          step="0.01"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={() => {
+            const parsed = parseFloat(draft);
+            if (!isNaN(parsed)) onChange(parsed);
+            setEditing(false);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              const parsed = parseFloat(draft);
+              if (!isNaN(parsed)) onChange(parsed);
+              setEditing(false);
+            }
+            if (e.key === "Escape") setEditing(false);
+          }}
+          className="w-full text-right text-[11px] font-sans px-1 py-0.5 rounded border outline-none"
+          style={{
+            background: "var(--input-bg)",
+            borderColor: "var(--gold)",
+            color: "var(--text-primary)",
+          }}
+        />
+      </td>
+    );
+  }
+
+  return (
+    <td
+      className="px-2 py-1.5 whitespace-nowrap text-right cursor-pointer hover:opacity-80"
+      style={{
+        color: color || "var(--text-secondary)",
+        background: isOverridden ? "rgba(212, 175, 55, 0.08)" : undefined,
+        borderBottom: isOverridden ? "2px solid var(--gold)" : undefined,
+        ...style,
+      }}
+      onClick={() => {
+        setDraft(value ? value.toString() : "0");
+        setEditing(true);
+      }}
+      title={isOverridden ? `Original: ${fmt(originalValue)}` : "Click to edit"}
+    >
+      {fmt(value)}
+    </td>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // BRANCH RESULTS VIEW — mirrors XLSX columns A–AF exactly
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -634,51 +725,112 @@ function BranchResults({
 }) {
   const { staffData, staffOrder, staffConfig, warnings } = data;
 
-  // Compute associate fees for supervisors (same logic as XLSX Col X)
-  // Uses computed associatePay from data, not the config value
+  const [overrides, setOverrides] = useState<Record<string, PayrollOverrides>>({});
+
+  const setOverride = useCallback((staffName: string, field: keyof PayrollOverrides, value: number) => {
+    setOverrides((prev) => ({
+      ...prev,
+      [staffName]: { ...prev[staffName], [field]: value },
+    }));
+  }, []);
+
+  // Compute associate fees using OVERRIDDEN associatePay values
   const associateFees: Record<string, number> = {};
   for (const [name, cfg] of Object.entries(staffConfig)) {
-    const assocPayData = staffData[name]?.associatePay || 0;
+    const raw = staffData[name]?.associatePay || 0;
+    const o = overrides[name] || {};
+    const assocPayData = o.associatePay ?? raw;
     if (cfg.supervisor && assocPayData && staffConfig[cfg.supervisor]) {
       associateFees[cfg.supervisor] = (associateFees[cfg.supervisor] || 0) + -assocPayData;
     }
   }
 
-  // Build computed rows
   const rows = staffOrder.map((name) => {
-    const d = staffData[name] || { productWk1: 0, productWk2: 0, contractorService: 0, associatePay: 0, tips: 0, newGuests: 0, employeePurchases: 0, creditCardAmount: 0, colorCharges: 0 };
+    const raw = staffData[name] || { productWk1: 0, productWk2: 0, contractorService: 0, associatePay: 0, tips: 0, newGuests: 0, employeePurchases: 0, creditCardAmount: 0, colorCharges: 0 };
     const cfg = staffConfig[name];
-    const rebateWk1 = boothRentRebate(d.productWk1);
-    const rebateWk2 = boothRentRebate(d.productWk2);
+    const o = overrides[name] || {};
+
+    const productWk1 = o.productWk1 ?? raw.productWk1;
+    const productWk2 = o.productWk2 ?? raw.productWk2;
+    const tips = o.tips ?? raw.tips;
+    const contractorService = o.contractorService ?? raw.contractorService;
+    const associatePay = o.associatePay ?? raw.associatePay;
+    const newGuests = o.newGuests ?? raw.newGuests;
+    const employeePurchases = o.employeePurchases ?? raw.employeePurchases;
+    const colorCharges = o.colorCharges ?? (raw.colorCharges ? -raw.colorCharges : 0);
+    const creditCardAmount = o.creditCardAmount ?? (raw.creditCardAmount || 0);
+    const stationLease = o.stationLease ?? cfg.stationLease;
+    const financialServices = o.financialServices ?? cfg.financialServices;
+    const phorestFee = o.phorestFee ?? cfg.phorestFee;
+    const refreshment = o.refreshment ?? cfg.refreshment;
+    const miscFees = o.miscFees ?? 0;
+
+    const rebateWk1 = boothRentRebate(productWk1);
+    const rebateWk2 = boothRentRebate(productWk2);
     const rebateTotal = rebateWk1 + rebateWk2;
-    const totalEarned = rebateTotal + d.tips + d.contractorService + d.associatePay;
-    const colorCharges = d.colorCharges ? -d.colorCharges : 0;
-    const ccAmount = d.creditCardAmount || 0;
-    const ccCharges = 0.03 * -ccAmount;
-    const findersFee = 0.2 * -(d.newGuests || 0);
-    const empPurch = d.employeePurchases ? -d.employeePurchases : 0;
+    const totalEarned = rebateTotal + tips + contractorService + associatePay;
+    const ccCharges = 0.03 * -creditCardAmount;
+    const findersFee = 0.2 * -(newGuests || 0);
+    const empPurch = employeePurchases ? -employeePurchases : 0;
     const assocFee = associateFees[name] || 0;
-    const miscFees = 0;
-    const totalCheck = totalEarned + (cfg.stationLease + cfg.financialServices + colorCharges + ccCharges + findersFee + empPurch + cfg.phorestFee + cfg.refreshment + assocFee + miscFees);
+    const totalCheck = totalEarned + (stationLease + financialServices + colorCharges + ccCharges + findersFee + empPurch + phorestFee + refreshment + assocFee + miscFees);
 
     return {
-      name,
-      cfg,
-      d,
-      rebateWk1,
-      rebateWk2,
-      rebateTotal,
-      totalEarned,
-      colorCharges,
-      ccAmount,
-      ccCharges,
-      findersFee,
-      empPurch,
-      assocFee,
-      miscFees,
-      totalCheck,
+      name, cfg, productWk1, productWk2, tips, contractorService, associatePay,
+      newGuests, employeePurchases, colorCharges, creditCardAmount,
+      stationLease, financialServices, phorestFee, refreshment, miscFees,
+      rebateWk1, rebateWk2, rebateTotal, totalEarned, ccCharges, findersFee,
+      empPurch, assocFee, totalCheck,
     };
   });
+
+  const handleDownload = useCallback(async () => {
+    if (Object.keys(overrides).length === 0) {
+      onDownload();
+      return;
+    }
+
+    const finalRows: FinalPayrollRow[] = rows.map((r) => ({
+      subsidiaryId: data.subsidiaryId,
+      internalId: r.cfg.internalId,
+      targetFirst: r.cfg.targetFirst,
+      targetLast: r.cfg.targetLast,
+      productWk1: r.productWk1,
+      productWk2: r.productWk2,
+      tips: r.tips,
+      contractorService: r.contractorService,
+      associatePay: r.associatePay,
+      stationLease: r.stationLease,
+      financialServices: r.financialServices,
+      colorCharges: r.colorCharges,
+      creditCardAmount: r.creditCardAmount,
+      newGuests: r.newGuests,
+      employeePurchases: r.empPurch,
+      phorestFee: r.phorestFee,
+      refreshment: r.refreshment,
+      associateFee: r.assocFee,
+      miscFees: r.miscFees,
+    }));
+
+    const xlsxBytes = await generatePayrollExcelFromRows(finalRows, {
+      abbreviation: data.abbreviation,
+      payPeriodLabel: data.payPeriod,
+      payDate: data.payDate,
+      postingPeriod: data.postingPeriod,
+      account: data.account,
+      subsidiaryId: data.subsidiaryId,
+    });
+
+    const blob = new Blob([xlsxBytes.buffer as ArrayBuffer], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${data.abbreviation}_payroll_edited.xlsx`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [overrides, rows, data, onDownload]);
 
   const totalPayroll = rows.reduce((sum, r) => sum + r.totalCheck, 0);
 
@@ -706,16 +858,24 @@ function BranchResults({
             &middot; {data.totalRows} transactions processed
           </p>
         </div>
-        <button
-          onClick={onDownload}
-          className="px-4 py-2 rounded-md text-xs font-sans font-medium tracking-wide transition-all"
-          style={{
-            background: "var(--gold)",
-            color: "#0a0b0e",
-          }}
-        >
-          Download XLSX
-        </button>
+        <div className="flex items-center gap-2">
+          {Object.keys(overrides).length > 0 && (
+            <button
+              onClick={() => setOverrides({})}
+              className="px-3 py-2 rounded-md text-xs font-sans font-medium tracking-wide transition-all border"
+              style={{ borderColor: "var(--border-light)", color: "var(--text-secondary)" }}
+            >
+              Reset Edits
+            </button>
+          )}
+          <button
+            onClick={handleDownload}
+            className="px-4 py-2 rounded-md text-xs font-sans font-medium tracking-wide transition-all"
+            style={{ background: "var(--gold)", color: "#0a0b0e" }}
+          >
+            {Object.keys(overrides).length > 0 ? "Download Edited XLSX" : "Download XLSX"}
+          </button>
+        </div>
       </div>
 
       {/* Warnings */}
@@ -854,7 +1014,6 @@ function BranchResults({
             {rows.map((r) => {
               const payDateObj = new Date(data.payDate + "T12:00:00");
               const payDateRef = `ACH ${payDateObj.getMonth() + 1}.${payDateObj.getDate()}.${payDateObj.getFullYear()}`;
-              const postingPeriod = data.payPeriod; // simplified display
 
               return (
                 <tr
@@ -863,59 +1022,59 @@ function BranchResults({
                   style={{ borderColor: "var(--border-light)" }}
                 >
                   {/* A: Subsidiary ID */}
-                  <td className={dc} style={{ color: "var(--text-muted)" }}>5</td>
+                  <td className={dc} style={{ color: "var(--text-muted)" }}>{data.subsidiaryId}</td>
                   {/* B: Internal ID */}
                   <td className={dc} style={{ color: "var(--text-muted)" }}>{r.cfg.internalId || ""}</td>
                   {/* C: First Names */}
                   <td className={dc} style={{ color: "var(--text-primary)" }}>{r.cfg.targetFirst}</td>
                   {/* D: Last Name */}
                   <td className={dc} style={{ color: "var(--text-primary)" }}>{r.cfg.targetLast}</td>
-                  {/* E: Product Sales (wk 1) */}
-                  <td className={`${dc} text-right`} style={{ color: "var(--text-secondary)" }}>{fmt(r.d.productWk1)}</td>
+                  {/* E: Product Sales (wk 1) — editable */}
+                  <EditableCell value={r.productWk1} originalValue={(staffData[r.name]?.productWk1) || 0} onChange={(v) => setOverride(r.name, "productWk1", v)} color="var(--text-secondary)" />
                   {/* F: Booth Rent Rebate (wk 1) — formula */}
                   <td className={`${dc} text-right`} style={{ color: "var(--text-secondary)" }}>{fmt(r.rebateWk1)}</td>
-                  {/* G: Product Sales (wk 2) */}
-                  <td className={`${dc} text-right`} style={{ color: "var(--text-secondary)" }}>{fmt(r.d.productWk2)}</td>
+                  {/* G: Product Sales (wk 2) — editable */}
+                  <EditableCell value={r.productWk2} originalValue={(staffData[r.name]?.productWk2) || 0} onChange={(v) => setOverride(r.name, "productWk2", v)} color="var(--text-secondary)" />
                   {/* H: Booth Rent Rebate (wk 2) — formula */}
                   <td className={`${dc} text-right`} style={{ color: "var(--text-secondary)" }}>{fmt(r.rebateWk2)}</td>
                   {/* I: Booth Rent Rebate Total — formula */}
                   <td className={`${dc} text-right`} style={{ color: "var(--text-secondary)" }}>{fmt(r.rebateTotal)}</td>
-                  {/* J: Tips */}
-                  <td className={`${dc} text-right`} style={{ color: "var(--text-secondary)" }}>{fmt(r.d.tips)}</td>
-                  {/* K: Contractor Service */}
-                  <td className={`${dc} text-right`} style={{ color: "var(--gold)" }}>{fmt(r.d.contractorService)}</td>
-                  {/* L: Associate Pay */}
-                  <td className={`${dc} text-right`} style={{ color: "var(--gold)" }}>{fmt(r.d.associatePay)}</td>
+                  {/* J: Tips — editable */}
+                  <EditableCell value={r.tips} originalValue={(staffData[r.name]?.tips) || 0} onChange={(v) => setOverride(r.name, "tips", v)} color="var(--text-secondary)" />
+                  {/* K: Contractor Service — editable */}
+                  <EditableCell value={r.contractorService} originalValue={(staffData[r.name]?.contractorService) || 0} onChange={(v) => setOverride(r.name, "contractorService", v)} color="var(--gold)" />
+                  {/* L: Associate Pay — editable */}
+                  <EditableCell value={r.associatePay} originalValue={(staffData[r.name]?.associatePay) || 0} onChange={(v) => setOverride(r.name, "associatePay", v)} color="var(--gold)" />
                   {/* M: Total Earned — formula */}
                   <td className={`${dc} text-right font-medium`} style={{ color: "var(--text-primary)" }}>{fmt(r.totalEarned)}</td>
-                  {/* N: Station Lease */}
-                  <td className={`${dc} text-right`} style={{ color: r.cfg.stationLease ? "#f87171" : "var(--text-muted)" }}>{fmtNeg(r.cfg.stationLease)}</td>
-                  {/* O: Financial Services */}
-                  <td className={`${dc} text-right`} style={{ color: r.cfg.financialServices ? "#f87171" : "var(--text-muted)" }}>{fmtNeg(r.cfg.financialServices)}</td>
-                  {/* P: Color Charges */}
-                  <td className={`${dc} text-right`} style={{ color: r.colorCharges ? "#f87171" : "var(--text-muted)", background: r.colorCharges ? undefined : manualBg }}>{fmtNeg(r.colorCharges)}</td>
-                  {/* Q: Credit Card Amount */}
-                  <td className={`${dc} text-right`} style={{ color: "var(--text-secondary)" }}>{fmt(r.ccAmount)}</td>
+                  {/* N: Station Lease — editable */}
+                  <EditableCell value={r.stationLease} originalValue={r.cfg.stationLease} onChange={(v) => setOverride(r.name, "stationLease", v)} color={r.stationLease ? "#f87171" : "var(--text-muted)"} />
+                  {/* O: Financial Services — editable */}
+                  <EditableCell value={r.financialServices} originalValue={r.cfg.financialServices} onChange={(v) => setOverride(r.name, "financialServices", v)} color={r.financialServices ? "#f87171" : "var(--text-muted)"} />
+                  {/* P: Color Charges — editable */}
+                  <EditableCell value={r.colorCharges} originalValue={staffData[r.name]?.colorCharges ? -staffData[r.name].colorCharges : 0} onChange={(v) => setOverride(r.name, "colorCharges", v)} color={r.colorCharges ? "#f87171" : "var(--text-muted)"} />
+                  {/* Q: Credit Card Amount — editable */}
+                  <EditableCell value={r.creditCardAmount} originalValue={(staffData[r.name]?.creditCardAmount) || 0} onChange={(v) => setOverride(r.name, "creditCardAmount", v)} color="var(--text-secondary)" />
                   {/* R: CC Charges 3% — formula */}
                   <td className={`${dc} text-right`} style={{ color: "var(--text-muted)" }}>{fmt(r.ccCharges)}</td>
-                  {/* S: New Guests */}
-                  <td className={`${dc} text-right`} style={{ color: "var(--text-secondary)" }}>{fmt(r.d.newGuests)}</td>
+                  {/* S: New Guests — editable */}
+                  <EditableCell value={r.newGuests} originalValue={(staffData[r.name]?.newGuests) || 0} onChange={(v) => setOverride(r.name, "newGuests", v)} color="var(--text-secondary)" />
                   {/* T: Finders Fee 20% — formula */}
                   <td className={`${dc} text-right`} style={{ color: r.findersFee ? "#f87171" : "var(--text-muted)" }}>{fmt(r.findersFee)}</td>
-                  {/* U: Employee Purchases */}
-                  <td className={`${dc} text-right`} style={{ color: r.empPurch ? "#f87171" : "var(--text-muted)" }}>{fmtNeg(r.empPurch)}</td>
-                  {/* V: Phorest */}
-                  <td className={`${dc} text-right`} style={{ color: r.cfg.phorestFee ? "#f87171" : "var(--text-muted)" }}>{fmtNeg(r.cfg.phorestFee)}</td>
-                  {/* W: Refreshment */}
-                  <td className={`${dc} text-right`} style={{ color: r.cfg.refreshment ? "#f87171" : "var(--text-muted)" }}>{fmtNeg(r.cfg.refreshment)}</td>
-                  {/* X: Associate Fee */}
-                  <td className={`${dc} text-right`} style={{ color: r.assocFee ? "#f87171" : "var(--text-muted)" }}>{fmtNeg(r.assocFee)}</td>
-                  {/* Y: Misc Fees */}
-                  <td className={`${dc} text-right`} style={{ color: "var(--text-muted)" }}></td>
+                  {/* U: Employee Purchases — editable */}
+                  <EditableCell value={r.employeePurchases} originalValue={(staffData[r.name]?.employeePurchases) || 0} onChange={(v) => setOverride(r.name, "employeePurchases", v)} color={r.empPurch ? "#f87171" : "var(--text-muted)"} />
+                  {/* V: Phorest — editable */}
+                  <EditableCell value={r.phorestFee} originalValue={r.cfg.phorestFee} onChange={(v) => setOverride(r.name, "phorestFee", v)} color={r.phorestFee ? "#f87171" : "var(--text-muted)"} />
+                  {/* W: Refreshment — editable */}
+                  <EditableCell value={r.refreshment} originalValue={r.cfg.refreshment} onChange={(v) => setOverride(r.name, "refreshment", v)} color={r.refreshment ? "#f87171" : "var(--text-muted)"} />
+                  {/* X: Associate Fee — formula */}
+                  <td className={`${dc} text-right`} style={{ color: r.assocFee ? "#f87171" : "var(--text-muted)" }}>{fmt(r.assocFee)}</td>
+                  {/* Y: Misc Fees — editable */}
+                  <EditableCell value={r.miscFees} originalValue={0} onChange={(v) => setOverride(r.name, "miscFees", v)} color={r.miscFees ? "#f87171" : "var(--text-muted)"} />
                   {/* Z: Total Check — formula */}
                   <td className={`${dc} text-right font-medium`} style={{ color: r.totalCheck > 0 ? "#4ade80" : r.totalCheck < 0 ? "#f87171" : "var(--text-muted)" }}>{fmt(r.totalCheck)}</td>
                   {/* AA: Account */}
-                  <td className={dc} style={{ color: "var(--text-muted)" }}>111</td>
+                  <td className={dc} style={{ color: "var(--text-muted)" }}>{data.account}</td>
                   {/* AB: Posting Period */}
                   <td className={dc} style={{ color: "var(--text-muted)" }}>{data.payPeriod.split("-")[0]?.split("/")[0]}/1</td>
                   {/* AC: Reference # */}
@@ -960,19 +1119,14 @@ function BranchResults({
         </table>
       </div>
 
-      {/* Manual Entry Legend */}
+      {/* Legend */}
       <div
-        className="mt-4 p-3 rounded-lg text-xs font-sans flex items-center gap-3"
+        className="mt-4 p-3 rounded-lg text-xs font-sans"
         style={{ background: "var(--card-bg)", color: "var(--text-muted)" }}
       >
-        <span
-          className="inline-block w-4 h-3 rounded-sm border"
-          style={{ background: manualBg, borderColor: "var(--border-light)" }}
-        />
         <span>
-          <strong style={{ color: "var(--text-secondary)" }}>Highlighted cells</strong> require manual entry in the downloaded XLSX.
-          Upload a Color Report CSV to auto-fill Color Charges (P).
-          Tips are GC-only — add cash tips manually.
+          Click any data cell to edit. <strong style={{ color: "var(--gold)" }}>Gold-highlighted cells</strong> have been modified from computed values.
+          Hover to see the original value. Formula columns (rebates, totals, CC charges, finders fee) recalculate automatically.
         </span>
       </div>
     </div>
