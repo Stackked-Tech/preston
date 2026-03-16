@@ -116,6 +116,42 @@ export function processCSV(
     };
   }
 
+  // Build normalized name lookup: "firstname lastname" → display_name
+  // Handles Phorest middle initials (e.g. "Dustin G Goodson" → "Dustin Goodson")
+  const normalizedNameMap = new Map<string, string>();
+  for (const displayName of Object.keys(staffConfig)) {
+    const parts = displayName.split(" ");
+    if (parts.length >= 2) {
+      const key = `${parts[0].toLowerCase()} ${parts[parts.length - 1].toLowerCase()}`;
+      // Only use if unambiguous (no two staff share first+last)
+      if (normalizedNameMap.has(key)) {
+        normalizedNameMap.set(key, ""); // mark ambiguous
+      } else {
+        normalizedNameMap.set(key, displayName);
+      }
+    }
+  }
+  const resolvedNameCache = new Map<string, string>();
+
+  function resolveStaffName(rawName: string): string | null {
+    // Exact match
+    if (rawName in staffData) return rawName;
+    // Check cache
+    if (resolvedNameCache.has(rawName)) return resolvedNameCache.get(rawName)!;
+    // Fuzzy: first word of first name + last name
+    const parts = rawName.split(" ");
+    if (parts.length >= 2) {
+      const key = `${parts[0].toLowerCase()} ${parts[parts.length - 1].toLowerCase()}`;
+      const match = normalizedNameMap.get(key);
+      if (match) {
+        resolvedNameCache.set(rawName, match);
+        warnings.push(`Staff name "${rawName}" in CSV matched to "${match}" (middle initial ignored)`);
+        return match;
+      }
+    }
+    return null;
+  }
+
   // Parse CSV
   const parsed = Papa.parse<PhorestRow>(csvText, {
     header: true,
@@ -156,11 +192,12 @@ export function processCSV(
   for (const row of parsed.data) {
     const staffFirst = (row.staff_first_name || "").trim();
     const staffLast = (row.staff_last_name || "").trim();
-    const staffName = `${staffFirst} ${staffLast}`;
+    const rawStaffName = `${staffFirst} ${staffLast}`;
     const itemType = (row.item_type || "").trim();
     const transactionId = (row.transaction_id || "").trim();
     const purchasedDate = parseDate(row.purchased_date);
 
+    const staffName = resolveStaffName(rawStaffName) || rawStaffName;
     const isKnownStaff = staffName in staffData;
 
     // ── Product Sales (wk1/wk2) ──
@@ -240,12 +277,9 @@ export function processCSV(
     ) {
       const gross = parseFloat(row.gross_total_amount || "0") || 0;
       const codes = txnPaymentCodes.get(transactionId);
-      if (codes) {
-        const staffKey = staffName in staffData ? staffName : null;
-        if (staffKey) {
-          if (codes.has("CC")) staffData[staffKey].creditCardAmount += gross;
-          if (codes.has("GC")) staffData[staffKey].creditCardAmount += gross;
-        }
+      if (codes && isKnownStaff) {
+        if (codes.has("CC")) staffData[staffName].creditCardAmount += gross;
+        if (codes.has("GC")) staffData[staffName].creditCardAmount += gross;
       }
     }
 
