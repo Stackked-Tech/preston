@@ -436,12 +436,34 @@ export function processCSV(
     d.colorCharges = Math.round(d.colorCharges * 100) / 100;
   }
 
+  // Remove staff with all-zero data (no activity in this period)
+  const activeStaffOrder = staffOrder.filter((name) => {
+    const d = staffData[name];
+    if (!d) return false;
+    return (
+      d.productWk1 !== 0 ||
+      d.productWk2 !== 0 ||
+      d.contractorService !== 0 ||
+      d.associatePay !== 0 ||
+      d.tips !== 0 ||
+      d.newGuests !== 0 ||
+      d.employeePurchases !== 0 ||
+      d.creditCardAmount !== 0 ||
+      d.colorCharges !== 0
+    );
+  });
+  for (const name of staffOrder) {
+    if (!activeStaffOrder.includes(name)) {
+      delete staffData[name];
+    }
+  }
+
   return {
     branchId: branch.branchId,
     branchName: branch.name,
     abbreviation: branch.abbreviation,
     staffData,
-    staffOrder,
+    staffOrder: activeStaffOrder,
     warnings,
   };
 }
