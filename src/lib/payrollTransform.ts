@@ -390,7 +390,7 @@ export function processCSV(
     d.associatePay = Math.round(d.associatePay * 100) / 100;
     d.tips = Math.round(d.tips * 100) / 100;
     d.newGuests = Math.round(d.newGuests * 100) / 100;
-    d.employeePurchases = Math.round(d.employeePurchases * 100) / 100;
+    d.employeePurchases = -Math.round(d.employeePurchases * 100) / 100;
     d.creditCardAmount = Math.round(d.creditCardAmount * 100) / 100;
     d.colorCharges = Math.round(d.colorCharges * 100) / 100;
   }
