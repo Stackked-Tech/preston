@@ -245,16 +245,13 @@ export function processCSV(
     const isKnownStaff = staffName in staffData;
 
     // ── Product Sales (wk1/wk2) ──
-    // Exclude employee purchases (ES payment code) — those go in Employee Purchases column
+    // Includes Employee Sale products (they also appear in Employee Purchases as a deduction)
     if (itemType === "PRODUCT" && isKnownStaff && purchasedDate) {
-      const paymentNames = (row.payment_type_names || "").trim();
-      if (!paymentNames.includes("Employee Sale")) {
-        const total = parseFloat(row.total_amount || "0") || 0;
-        if (purchasedDate <= week1End) {
-          staffData[staffName].productWk1 += total;
-        } else {
-          staffData[staffName].productWk2 += total;
-        }
+      const total = parseFloat(row.total_amount || "0") || 0;
+      if (purchasedDate <= week1End) {
+        staffData[staffName].productWk1 += total;
+      } else {
+        staffData[staffName].productWk2 += total;
       }
     }
 
