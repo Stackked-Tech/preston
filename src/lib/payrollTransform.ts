@@ -255,16 +255,11 @@ export function processCSV(
       }
     }
 
-    // ── Service Totals — Col K (contractor) or Col L (associate) ──
+    // ── Service Totals — always Col K (contractor service) ──
+    // Associate pay (Col L) is for manually-entered hourly wages, not Phorest service revenue
     if (itemType === "SERVICE" && isKnownStaff) {
       const total = parseFloat(row.total_amount || "0") || 0;
-      const cfg = staffConfig[staffName];
-      const isAssociate = cfg.supervisor !== undefined && cfg.supervisor !== null;
-      if (isAssociate) {
-        staffData[staffName].associatePay += total;
-      } else {
-        staffData[staffName].contractorService += total;
-      }
+      staffData[staffName].contractorService += total;
     }
 
     // ── Tips (only GC transactions, deduplicate by transaction_id) ──
@@ -440,7 +435,8 @@ export function processCSV(
   const activeStaffOrder = staffOrder.filter((name) => {
     const d = staffData[name];
     if (!d) return false;
-    return (
+    // Keep staff with any transaction data
+    const hasData =
       d.productWk1 !== 0 ||
       d.productWk2 !== 0 ||
       d.contractorService !== 0 ||
@@ -449,7 +445,17 @@ export function processCSV(
       d.newGuests !== 0 ||
       d.employeePurchases !== 0 ||
       d.creditCardAmount !== 0 ||
-      d.colorCharges !== 0
+      d.colorCharges !== 0;
+    if (hasData) return true;
+    // Also keep staff with configured fees (they'll appear on the report for deductions)
+    const cfg = staffConfig[name];
+    if (!cfg) return false;
+    return (
+      cfg.stationLease !== 0 ||
+      cfg.financialServices !== 0 ||
+      cfg.phorestFee !== 0 ||
+      cfg.refreshment !== 0 ||
+      (cfg.supervisor !== undefined && cfg.supervisor !== null)
     );
   });
   for (const name of staffOrder) {
