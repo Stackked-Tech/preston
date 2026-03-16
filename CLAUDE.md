@@ -36,6 +36,7 @@ No test framework is configured.
 - **exceljs** — XLSX generation (Payout Suite payroll)
 - **Twilio REST API** — SMS send/receive via direct fetch (no SDK) for Paramount Communications
 - **Supabase Realtime** — Live message updates and contact sync (Paramount Communications)
+- **Resend** — Transactional email for signing invitations (Signed to Sealed)
 
 ## Architecture
 
@@ -77,6 +78,10 @@ Most database access is **client-side via Supabase SDK**. Each micro-app has its
 - `src/app/api/paramount/status/route.ts` — Twilio delivery status callback webhook
 - `src/app/api/paramount/schedule/route.ts` — Create/cancel scheduled messages
 - `src/app/api/paramount/send-scheduled/route.ts` — Cron endpoint to send due scheduled messages
+
+**Exception — Signed to Sealed:** Uses a server-side API route for email invitations:
+- `src/app/api/signed-to-sealed/send-invite/route.ts` — Send signing invitation emails via Resend
+- `src/lib/signingEmailTemplate.ts` — HTML email template generator (table-based, inline styles for email client compatibility)
 
 Payout Suite key libs:
 - `src/lib/payrollTransform.ts` — Phorest CSV → per-staff payroll data
@@ -149,6 +154,8 @@ TWILIO_ACCOUNT_SID=<twilio-account-sid>     # Paramount Communications
 TWILIO_AUTH_TOKEN=<twilio-auth-token>       # Paramount Communications
 TWILIO_PHONE_NUMBER=<+1XXXXXXXXXX>          # Paramount Communications
 CRON_SECRET=<cron-secret>                   # Paramount Communications (scheduled messages)
+RESEND_API_KEY=<resend-api-key>             # Signed to Sealed (email invitations)
+RESEND_FROM_EMAIL=<sender@yourdomain.com>   # Signed to Sealed (optional, defaults to onboarding@resend.dev)
 ```
 
 The Supabase client (`src/lib/supabase.ts`) creates a placeholder if env vars are missing — the app builds but shows error states at runtime.

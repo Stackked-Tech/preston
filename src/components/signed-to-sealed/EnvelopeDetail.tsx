@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useEnvelopeDetail, useAuditLog, useEnvelopes, useDocumentUpload } from "@/lib/signedToSealedHooks";
 import type { STSRecipient, EnvelopeStatus } from "@/types/signedtosealed";
 import { STATUS_LABELS, FIELD_TYPE_LABELS } from "@/types/signedtosealed";
+import { generateSigningEmail } from "@/lib/signingEmailTemplate";
 import AuditTrail from "./AuditTrail";
 import DocumentViewer from "./DocumentViewer";
 
@@ -40,6 +41,9 @@ export default function EnvelopeDetail({ envelopeId, onBack, onEdit }: EnvelopeD
   const [showVoidModal, setShowVoidModal] = useState(false);
   const [voidReason, setVoidReason] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
+  const [emailPreviewHtml, setEmailPreviewHtml] = useState<string | null>(null);
+  const [emailPreviewRecipient, setEmailPreviewRecipient] = useState<string | null>(null);
+  const [sendingEmailTo, setSendingEmailTo] = useState<string | null>(null);
 
   const handleSend = async () => {
     if (!detail) return;
@@ -116,6 +120,60 @@ export default function EnvelopeDetail({ envelopeId, onBack, onEdit }: EnvelopeD
   const copyLink = async (r: STSRecipient) => {
     await navigator.clipboard.writeText(getSigningLink(r));
     alert(`Signing link copied for ${r.name}`);
+  };
+
+  const previewEmail = (r: STSRecipient) => {
+    if (!detail) return;
+    const recipientFields = detail.fields.filter((f) => f.recipient_id === r.id);
+    const html = generateSigningEmail({
+      recipientName: r.name,
+      senderName: detail.created_by || "WHB Companies",
+      envelopeTitle: detail.title || "Untitled Envelope",
+      envelopeMessage: detail.message || "",
+      signingLink: getSigningLink(r),
+      documentCount: detail.documents.length,
+      fieldCount: recipientFields.length,
+    });
+    setEmailPreviewHtml(html);
+    setEmailPreviewRecipient(r.name);
+  };
+
+  const copyEmailHtml = async () => {
+    if (!emailPreviewHtml) return;
+    await navigator.clipboard.writeText(emailPreviewHtml);
+    alert("Email HTML copied to clipboard");
+  };
+
+  const sendEmail = async (r: STSRecipient) => {
+    if (!detail) return;
+    const recipientFields = detail.fields.filter((f) => f.recipient_id === r.id);
+    setSendingEmailTo(r.id);
+    try {
+      const res = await fetch("/api/signed-to-sealed/send-invite", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          recipientName: r.name,
+          recipientEmail: r.email,
+          senderName: detail.created_by || "WHB Companies",
+          envelopeTitle: detail.title || "Untitled Envelope",
+          envelopeMessage: detail.message || "",
+          signingLink: getSigningLink(r),
+          documentCount: detail.documents.length,
+          fieldCount: recipientFields.length,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(`Failed to send: ${data.error}`);
+      } else {
+        alert(`Email sent to ${r.email}`);
+      }
+    } catch {
+      alert("Failed to send email");
+    } finally {
+      setSendingEmailTo(null);
+    }
   };
 
   const formatDate = (d: string | null) => {
@@ -333,13 +391,30 @@ export default function EnvelopeDetail({ envelopeId, onBack, onEdit }: EnvelopeD
                       Signed
                     </span>
                   ) : (
-                    <button
-                      onClick={() => copyLink(r)}
-                      className="text-xs px-3 py-1.5 rounded-md font-medium transition-all hover:opacity-90"
-                      style={{ background: "var(--gold)", color: "#0a0b0e" }}
-                    >
-                      Copy Link
-                    </button>
+                    <>
+                      <button
+                        onClick={() => previewEmail(r)}
+                        className="text-xs px-3 py-1.5 rounded-md border transition-all hover:opacity-80"
+                        style={{ borderColor: "var(--border-color)", color: "var(--text-muted)" }}
+                      >
+                        Preview Email
+                      </button>
+                      <button
+                        onClick={() => sendEmail(r)}
+                        disabled={sendingEmailTo === r.id}
+                        className="text-xs px-3 py-1.5 rounded-md font-medium transition-all hover:opacity-90"
+                        style={{ background: "#10b981", color: "#fff", opacity: sendingEmailTo === r.id ? 0.5 : 1 }}
+                      >
+                        {sendingEmailTo === r.id ? "Sending..." : "Send Email"}
+                      </button>
+                      <button
+                        onClick={() => copyLink(r)}
+                        className="text-xs px-3 py-1.5 rounded-md font-medium transition-all hover:opacity-90"
+                        style={{ background: "var(--gold)", color: "#0a0b0e" }}
+                      >
+                        Copy Link
+                      </button>
+                    </>
                   )}
                 </div>
               </div>
@@ -487,6 +562,54 @@ export default function EnvelopeDetail({ envelopeId, onBack, onEdit }: EnvelopeD
           <p className="text-xs tracking-[1px] uppercase mb-1" style={{ color: "#ef4444" }}>Void Reason</p>
           <p className="text-sm" style={{ color: "var(--text-primary)" }}>{detail.void_reason}</p>
         </section>
+      )}
+
+      {/* Email Preview Modal */}
+      {emailPreviewHtml && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div
+            className="rounded-xl border w-full max-w-2xl max-h-[90vh] flex flex-col"
+            style={{ background: "var(--bg-secondary)", borderColor: "var(--border-color)" }}
+          >
+            <div className="flex items-center justify-between px-6 py-4 border-b" style={{ borderColor: "var(--border-color)" }}>
+              <div>
+                <h3 className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                  Email Preview — {emailPreviewRecipient}
+                </h3>
+                <p className="text-[10px] mt-0.5" style={{ color: "var(--text-muted)" }}>
+                  This is what the recipient will receive
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={copyEmailHtml}
+                  className="text-xs px-3 py-1.5 rounded-md border transition-all hover:opacity-80"
+                  style={{ borderColor: "var(--border-color)", color: "var(--text-muted)" }}
+                >
+                  Copy HTML
+                </button>
+                <button
+                  onClick={() => { setEmailPreviewHtml(null); setEmailPreviewRecipient(null); }}
+                  className="text-xs px-3 py-1.5 rounded-md border transition-all hover:opacity-80"
+                  style={{ borderColor: "var(--border-color)", color: "var(--text-muted)" }}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 overflow-auto p-4">
+              <div className="rounded-lg overflow-hidden border" style={{ borderColor: "var(--border-light)" }}>
+                <iframe
+                  srcDoc={emailPreviewHtml}
+                  title="Email Preview"
+                  className="w-full border-0"
+                  style={{ height: "600px", background: "#0f1012" }}
+                  sandbox="allow-same-origin"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Void Modal */}
