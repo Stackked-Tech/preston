@@ -87,6 +87,50 @@ function parseDate(dateStr: string | undefined): string | null {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// NAME RESOLUTION
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Create a name resolver that handles Phorest middle initials.
+ * E.g., "Dustin G Goodson" → "Dustin Goodson" if "Dustin Goodson" is in staffConfig.
+ */
+export function createStaffNameResolver(
+  staffNames: string[]
+): (rawName: string) => string | null {
+  const exactSet = new Set(staffNames);
+
+  const normalizedMap = new Map<string, string>();
+  for (const displayName of staffNames) {
+    const parts = displayName.split(" ");
+    if (parts.length >= 2) {
+      const key = `${parts[0].toLowerCase()} ${parts[parts.length - 1].toLowerCase()}`;
+      if (normalizedMap.has(key)) {
+        normalizedMap.set(key, ""); // ambiguous
+      } else {
+        normalizedMap.set(key, displayName);
+      }
+    }
+  }
+
+  const cache = new Map<string, string>();
+
+  return (rawName: string): string | null => {
+    if (exactSet.has(rawName)) return rawName;
+    if (cache.has(rawName)) return cache.get(rawName)!;
+    const parts = rawName.split(" ");
+    if (parts.length >= 2) {
+      const key = `${parts[0].toLowerCase()} ${parts[parts.length - 1].toLowerCase()}`;
+      const match = normalizedMap.get(key);
+      if (match) {
+        cache.set(rawName, match);
+        return match;
+      }
+    }
+    return null;
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // CSV PROCESSING
 // ═══════════════════════════════════════════════════════════════════════════════
 

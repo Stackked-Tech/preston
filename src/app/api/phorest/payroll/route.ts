@@ -4,7 +4,8 @@ import {
   pollCsvExportJob,
   downloadCsv,
 } from "@/lib/phorestClient";
-import { processCSV } from "@/lib/payrollTransform";
+import { processCSV, createStaffNameResolver } from "@/lib/payrollTransform";
+import { fetchStaffTips } from "@/lib/phorestLookerClient";
 import { generatePayrollExcel } from "@/lib/payrollExcel";
 import {
   fetchBranchConfigs,
@@ -127,6 +128,38 @@ export async function POST(request: NextRequest) {
       results.warnings.push(...colorResult.warnings);
     }
 
+    // 4c. Overlay Looker-sourced tips (Paid to Salon) if available
+    let tipsSource: "looker" | "csv-gc-fallback" = "csv-gc-fallback";
+    try {
+      const lookerTips = await fetchStaffTips({
+        branchId,
+        branchName: branch.name,
+        startDate,
+        endDate,
+      });
+
+      // Resolve Looker staff names (may include middle initials) to config names
+      const resolveName = createStaffNameResolver(
+        Object.keys(branch.staffConfig)
+      );
+      // Reset all tips to 0, then apply Looker values
+      for (const name of Object.keys(results.staffData)) {
+        results.staffData[name].tips = 0;
+      }
+      for (const [lookerName, paidToSalon] of lookerTips) {
+        const resolved = resolveName(lookerName) || lookerName;
+        if (results.staffData[resolved]) {
+          results.staffData[resolved].tips =
+            Math.round(paidToSalon * 100) / 100;
+        }
+      }
+      tipsSource = "looker";
+    } catch (err) {
+      results.warnings.push(
+        `Looker tips unavailable, using GC-based fallback: ${err instanceof Error ? err.message : "Unknown"}`
+      );
+    }
+
     // 5. Generate Excel
     const excelBuffer = await generatePayrollExcel(results, branch, payPeriod);
     const excelBase64 = excelBuffer.toString("base64");
@@ -173,6 +206,7 @@ export async function POST(request: NextRequest) {
       warnings: allWarnings,
       excelBase64,
       filePath,
+      tipsSource,
       totalRows: completedJob.totalRows,
       subsidiaryId: payPeriod.subsidiaryId,
       account: payPeriod.account,
