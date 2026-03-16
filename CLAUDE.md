@@ -101,6 +101,7 @@ Payout Suite key libs:
 - `src/lib/payrollConfig.ts` — Branch/staff config with NetSuite IDs and fees; `fetchBranchConfigs()` reads from `ea_*` tables at runtime
 - `src/lib/colorChargesParser.ts` — Color stylist report CSV parser
 - `src/lib/phorestClient.ts` — Phorest API client (CSV export jobs)
+- `src/lib/phorestLookerClient.ts` — Phorest Looker integration for authoritative "Paid to Salon" tips via OAuth → SSO → Looker query
 - `Salon Exports/MAPPING-DOCUMENTATION.md` — Column-by-column mapping spec
 
 ### Type Definitions (`src/types/`)
@@ -173,6 +174,9 @@ RESEND_API_KEY=<resend-api-key>             # Signed to Sealed (email invitation
 RESEND_FROM_EMAIL=<sender@yourdomain.com>   # Signed to Sealed (optional, defaults to onboarding@resend.dev)
 ANTHROPIC_API_KEY=<anthropic-api-key>          # Hospitality (Claude Haiku translation)
 TWILIO_HM_PHONE_NUMBER=<+1XXXXXXXXXX>          # Hospitality (dedicated Twilio number, optional)
+PHOREST_USER_EMAIL=<phorest-user-email>            # Payout Suite (Looker tips)
+PHOREST_USER_PASSWORD=<phorest-user-password>      # Payout Suite (Looker tips)
+PHOREST_BUSINESS_ID_INTERNAL=<business-id>         # Payout Suite (Looker tips, internal Phorest business ID)
 ```
 
 The Supabase client (`src/lib/supabase.ts`) creates a placeholder if env vars are missing — the app builds but shows error states at runtime.
@@ -188,6 +192,17 @@ curl -s -X POST "https://api.supabase.com/v1/projects/sfftouuzdrxfwcqqjjpm/datab
   -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d "$(jq -n --arg sql "$(cat migration.sql)" '{query: $sql}')"
 ```
+
+### Payout Suite — Payroll Business Rules
+
+Key rules discovered through comparison with Rachel's NetSuite templates:
+- **Tips:** Sourced from Phorest Looker "Paid to Salon" column (not CSV `phorest_tips` or `staff_tips` — those don't carry the salon/staff routing). Falls back to GC-payment-type filter from CSV if Looker unavailable.
+- **Product Sales:** Include Employee Sale (ES) products — they appear in both product sales (for booth rent rebate) AND employee purchases (as deduction). Negative product totals (voids/returns) are floored to $0.
+- **Service Totals:** Always go to contractor service column (Col K), even for associates. Associate pay column (Col L) is for manually-entered hourly wages from time cards only.
+- **Employee Purchases:** Negated in output (they're deductions). Matched by client name → staff via `ea_name_overrides` table.
+- **Staff Name Matching:** Phorest CSV includes middle initials in `staff_first_name` (e.g., "Dustin G" not "Dustin"). `createStaffNameResolver()` handles fuzzy first+last matching.
+- **All-Zero Filter:** Staff with no transaction data are dropped unless they have configured fees (station lease, financial services, phorest, refreshment) or are associates.
+- **New Guest / Finders Fee:** Shared-client dedup is manual (Rachel assigns credit) — automated tie-breaking uses earliest timestamp + alphabetical.
 
 ## Conventions
 
