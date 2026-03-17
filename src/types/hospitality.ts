@@ -16,6 +16,11 @@ export interface HMProperty {
   notes: string | null;
   qr_code_id: string;
   is_active: boolean;
+  hourly_rate: number | null;
+  is_retainer: boolean;
+  retainer_amount: number | null;
+  retainer_start_date: string | null;
+  retainer_end_date: string | null;
   created_at: string;
 }
 

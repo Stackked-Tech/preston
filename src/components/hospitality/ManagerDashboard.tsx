@@ -8,6 +8,7 @@ import {
   useProperties,
   useReviewRequest,
   useHMUsers,
+  useCreateTask,
 } from "@/lib/hospitalityHooks";
 import type {
   HMRequestStatus,
@@ -17,13 +18,16 @@ import type {
 import RequestQueue from "./RequestQueue";
 import ApprovalModal from "./ApprovalModal";
 import RejectionModal from "./RejectionModal";
+import CreateTaskModal from "./CreateTaskModal";
 
 type StatusTab = "pending" | "approved" | "rejected";
 
 export default function ManagerDashboard() {
   const { theme, toggleTheme } = useTheme();
   const { properties } = useProperties();
+  const { users: allUsers } = useHMUsers();
   const { users: staffUsers } = useHMUsers("staff");
+  const { createTask, creating: creatingTask } = useCreateTask();
   const {
     approveRequest,
     approveWithEdits,
@@ -46,6 +50,9 @@ export default function ManagerDashboard() {
     loading: requestsLoading,
     refetch: refetchRequests,
   } = useRequests(propertyIds, statusFilter as HMRequestStatus);
+
+  // Create task state
+  const [showCreateTask, setShowCreateTask] = useState(false);
 
   // Modal state
   const [approvalRequest, setApprovalRequest] =
@@ -203,6 +210,16 @@ export default function ManagerDashboard() {
           Hospitality Management
         </h1>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowCreateTask(true)}
+            className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
+            style={{
+              background: "var(--gold)",
+              color: "#0a0b0e",
+            }}
+          >
+            + Create Task
+          </button>
           <Link
             href="/hospitality/tasks"
             className="px-3 py-1.5 rounded-lg text-xs font-medium border no-underline transition-colors"
@@ -350,6 +367,18 @@ export default function ManagerDashboard() {
         onClose={() => setRejectionRequest(null)}
         processing={processing}
       />
+
+      {showCreateTask && (
+        <CreateTaskModal
+          properties={properties}
+          users={allUsers}
+          onSubmit={async (task) => {
+            await createTask(task);
+          }}
+          onClose={() => setShowCreateTask(false)}
+          submitting={creatingTask}
+        />
+      )}
     </div>
   );
 }

@@ -205,6 +205,11 @@ function PropertyFormModal({ property, onSave, onUpdate, onClose }: PropertyForm
     lat: property?.lat?.toString() ?? "",
     lng: property?.lng?.toString() ?? "",
     notes: property?.notes ?? "",
+    hourly_rate: property?.hourly_rate?.toString() ?? "",
+    is_retainer: property?.is_retainer ?? false,
+    retainer_amount: property?.retainer_amount?.toString() ?? "",
+    retainer_start_date: property?.retainer_start_date ?? "",
+    retainer_end_date: property?.retainer_end_date ?? "",
   });
   const [saving, setSaving] = useState(false);
 
@@ -224,6 +229,11 @@ function PropertyFormModal({ property, onSave, onUpdate, onClose }: PropertyForm
         lng: form.lng ? parseFloat(form.lng) : null,
         notes: form.notes.trim() || null,
         is_active: true,
+        hourly_rate: form.hourly_rate ? parseFloat(form.hourly_rate) : null,
+        is_retainer: form.is_retainer,
+        retainer_amount: form.retainer_amount ? parseFloat(form.retainer_amount) : null,
+        retainer_start_date: form.retainer_start_date || null,
+        retainer_end_date: form.retainer_end_date || null,
       };
 
       if (isEditing && property) {
@@ -332,6 +342,90 @@ function PropertyFormModal({ property, onSave, onUpdate, onClose }: PropertyForm
               tabIndex={-1}
             />
           </div>
+          {/* Billing Section */}
+          <div className="col-span-2 border-t pt-3 mt-1" style={{ borderColor: "var(--border-light)" }}>
+            <p className="text-xs font-medium mb-2" style={{ color: "var(--gold)" }}>
+              Billing
+            </p>
+          </div>
+
+          {/* Retainer Toggle */}
+          <div className="col-span-2">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <div
+                onClick={() => setForm((f) => ({ ...f, is_retainer: !f.is_retainer }))}
+                className="relative w-10 h-5 rounded-full transition-colors"
+                style={{
+                  background: form.is_retainer ? "var(--gold)" : "var(--input-bg)",
+                  border: "1px solid var(--border-color)",
+                }}
+              >
+                <div
+                  className="absolute top-0.5 w-3.5 h-3.5 rounded-full transition-transform"
+                  style={{
+                    background: form.is_retainer ? "#0a0b0e" : "var(--text-muted)",
+                    transform: form.is_retainer ? "translateX(20px)" : "translateX(3px)",
+                  }}
+                />
+              </div>
+              <span style={{ ...labelStyle, marginBottom: 0 }}>
+                On Retainer
+              </span>
+            </label>
+          </div>
+
+          {/* Hourly Rate (shown when NOT on retainer) */}
+          {!form.is_retainer && (
+            <div className="col-span-2">
+              <label style={labelStyle}>Hourly Rate ($)</label>
+              <input
+                style={inputStyle}
+                type="number"
+                step="0.01"
+                min="0"
+                value={form.hourly_rate}
+                onChange={(e) => setForm((f) => ({ ...f, hourly_rate: e.target.value }))}
+                placeholder="0.00"
+              />
+            </div>
+          )}
+
+          {/* Retainer Fields (shown when on retainer) */}
+          {form.is_retainer && (
+            <>
+              <div className="col-span-2">
+                <label style={labelStyle}>Retainer Amount ($)</label>
+                <input
+                  style={inputStyle}
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={form.retainer_amount}
+                  onChange={(e) => setForm((f) => ({ ...f, retainer_amount: e.target.value }))}
+                  placeholder="0.00"
+                />
+              </div>
+              <div>
+                <label style={labelStyle}>Start Date</label>
+                <input
+                  style={inputStyle}
+                  type="date"
+                  value={form.retainer_start_date}
+                  onChange={(e) => setForm((f) => ({ ...f, retainer_start_date: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label style={labelStyle}>Renewal / Expiry Date</label>
+                <input
+                  style={inputStyle}
+                  type="date"
+                  value={form.retainer_end_date}
+                  onChange={(e) => setForm((f) => ({ ...f, retainer_end_date: e.target.value }))}
+                />
+              </div>
+            </>
+          )}
+
           <div className="col-span-2">
             <label style={labelStyle}>Notes</label>
             <textarea
@@ -418,6 +512,7 @@ export default function PropertyManager() {
               <th className="text-left px-4 py-3 font-sans font-medium" style={{ color: "var(--text-secondary)" }}>Name</th>
               <th className="text-left px-4 py-3 font-sans font-medium hidden md:table-cell" style={{ color: "var(--text-secondary)" }}>Address</th>
               <th className="text-left px-4 py-3 font-sans font-medium hidden md:table-cell" style={{ color: "var(--text-secondary)" }}>City/State</th>
+              <th className="text-left px-4 py-3 font-sans font-medium hidden lg:table-cell" style={{ color: "var(--text-secondary)" }}>Billing</th>
               <th className="text-center px-4 py-3 font-sans font-medium" style={{ color: "var(--text-secondary)" }}>Status</th>
               <th className="text-center px-4 py-3 font-sans font-medium" style={{ color: "var(--text-secondary)" }}>QR</th>
               <th className="text-center px-4 py-3 font-sans font-medium" style={{ color: "var(--text-secondary)" }}>Actions</th>
@@ -443,6 +538,18 @@ export default function PropertyManager() {
                 </td>
                 <td className="px-4 py-3 hidden md:table-cell" style={{ color: "var(--text-secondary)" }}>
                   {[p.city, p.state].filter(Boolean).join(", ") || "-"}
+                </td>
+                <td className="px-4 py-3 hidden lg:table-cell" style={{ color: "var(--text-secondary)" }}>
+                  {p.is_retainer ? (
+                    <span className="text-xs">
+                      <span className="font-medium" style={{ color: "var(--gold)" }}>Retainer</span>
+                      {p.retainer_amount != null && ` $${p.retainer_amount.toLocaleString()}`}
+                    </span>
+                  ) : p.hourly_rate != null ? (
+                    <span className="text-xs">${p.hourly_rate}/hr</span>
+                  ) : (
+                    <span className="text-xs" style={{ color: "var(--text-muted)" }}>-</span>
+                  )}
                 </td>
                 <td className="px-4 py-3 text-center">
                   <span
@@ -484,7 +591,7 @@ export default function PropertyManager() {
             ))}
             {properties.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center" style={{ color: "var(--text-muted)" }}>
+                <td colSpan={7} className="px-4 py-8 text-center" style={{ color: "var(--text-muted)" }}>
                   No properties yet. Add one to get started.
                 </td>
               </tr>

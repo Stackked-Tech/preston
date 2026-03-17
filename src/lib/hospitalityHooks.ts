@@ -875,6 +875,58 @@ export function useReviewRequest() {
   return { approveRequest, approveWithEdits, rejectRequest, processing, error };
 }
 
+// ─── Create Task (standalone) ────────────────────────
+
+export function useCreateTask() {
+  const [creating, setCreating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const createTask = useCallback(
+    async (task: {
+      property_id: string;
+      title: string;
+      description: string;
+      priority: HMPriority;
+      assigned_to: string;
+      due_date: string;
+    }) => {
+      if (!isSupabaseConfigured) throw new Error("Supabase not configured");
+      try {
+        setCreating(true);
+        setError(null);
+
+        const { data, error: insertErr } = await supabase
+          .from("hm_tasks")
+          .insert({
+            property_id: task.property_id,
+            title: task.title,
+            description: task.description,
+            priority: task.priority,
+            assigned_to: task.assigned_to,
+            due_date: task.due_date,
+            status: "new" as HMTaskStatus,
+            request_id: null,
+            recurring_task_id: null,
+          })
+          .select()
+          .single();
+        if (insertErr) throw insertErr;
+        return data as HMTask;
+      } catch (err) {
+        const msg =
+          err instanceof Error ? err.message : "Failed to create task";
+        setError(msg);
+        throw err;
+      } finally {
+        setCreating(false);
+      }
+    },
+    []
+  );
+
+  return { createTask, creating, error };
+}
+
 // ─── Tasks ──────────────────────────────────────────
 
 const PRIORITY_RANK: Record<HMPriority, number> = {

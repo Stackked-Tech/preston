@@ -2,12 +2,13 @@
 
 import { useState, useCallback } from "react";
 import Link from "next/link";
-import { useTasks } from "@/lib/hospitalityHooks";
+import { useTasks, useCreateTask, useProperties, useHMUsers } from "@/lib/hospitalityHooks";
 import type { HMTaskStatus } from "@/types/hospitality";
 import TaskList from "./TaskList";
 import TaskDetail from "./TaskDetail";
 import TaskMap from "./TaskMap";
 import RouteOptimizer from "./RouteOptimizer";
+import CreateTaskModal from "./CreateTaskModal";
 
 interface AuthUser {
   id: string;
@@ -41,6 +42,12 @@ export default function TaskBoard() {
   // Map state
   const [routeGeometry, setRouteGeometry] = useState<GeoJSON.LineString | null>(null);
   const [routeStopOrder, setRouteStopOrder] = useState<string[]>([]);
+
+  // Create task state
+  const [showCreateTask, setShowCreateTask] = useState(false);
+  const { createTask, creating } = useCreateTask();
+  const { properties } = useProperties();
+  const { users } = useHMUsers();
 
   // Filter state
   const [statusFilters, setStatusFilters] = useState<HMTaskStatus[]>([
@@ -508,6 +515,48 @@ export default function TaskBoard() {
           />
         ) : null}
       </div>
+
+      {/* Floating Create Task Button */}
+      {viewMode === "list" && (
+        <button
+          onClick={() => setShowCreateTask(true)}
+          className="fixed z-40 w-14 h-14 rounded-full flex items-center justify-center shadow-lg transition-transform active:scale-95"
+          style={{
+            background: "var(--gold)",
+            color: "#0a0b0e",
+            bottom: 76,
+            right: 16,
+          }}
+        >
+          <svg
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+        </button>
+      )}
+
+      {/* Create Task Modal */}
+      {showCreateTask && (
+        <CreateTaskModal
+          properties={properties}
+          users={users}
+          onSubmit={async (task) => {
+            await createTask(task);
+            refetch();
+          }}
+          onClose={() => setShowCreateTask(false)}
+          submitting={creating}
+        />
+      )}
 
       {/* Bottom Nav — only show in list mode */}
       {viewMode === "list" && (
