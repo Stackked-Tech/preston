@@ -243,7 +243,7 @@ export default function DocumentViewer({
         <div
           ref={containerRef}
           className="relative inline-block"
-          style={{ transform: `scale(${zoom})`, transformOrigin: "top center" }}
+          style={{ transform: `scale(${zoom})`, transformOrigin: "top center", minHeight: "min-content" }}
         >
           {pdfReady && Document && Page ? (
             <Document
