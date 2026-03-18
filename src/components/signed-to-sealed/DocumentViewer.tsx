@@ -69,20 +69,27 @@ export default function DocumentViewer({
   const lastMouseRef = useRef({ x: 0, y: 0 });
   const [draggingFieldId, setDraggingFieldId] = useState<string | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const [dragPos, setDragPos] = useState<{ x: number; y: number } | null>(null);
   const [resizingFieldId, setResizingFieldId] = useState<string | null>(null);
   const [resizeStart, setResizeStart] = useState({ mouseX: 0, mouseY: 0, w: 0, h: 0 });
+  const [resizePos, setResizePos] = useState<{ w: number; h: number } | null>(null);
 
-  // Compute and apply field position from current mouse + container state
-  const updateFieldPosition = useCallback(() => {
-    if (!draggingFieldId || !containerRef.current) return;
+  // Compute drag position from current mouse + container state (local only, no DB)
+  const computeDragPosition = useCallback(() => {
+    if (!draggingFieldId || !containerRef.current) return null;
     const rect = containerRef.current.getBoundingClientRect();
     const { x, y } = lastMouseRef.current;
-    const xPct = ((x - rect.left - dragOffset.x) / rect.width) * 100;
-    const yPct = ((y - rect.top - dragOffset.y) / rect.height) * 100;
-    onFieldMove?.(draggingFieldId, Math.max(0, Math.min(xPct, 95)), Math.max(0, Math.min(yPct, 95)));
-  }, [draggingFieldId, dragOffset, onFieldMove]);
+    const xPct = Math.max(0, Math.min(((x - rect.left - dragOffset.x) / rect.width) * 100, 95));
+    const yPct = Math.max(0, Math.min(((y - rect.top - dragOffset.y) / rect.height) * 100, 95));
+    return { x: xPct, y: yPct };
+  }, [draggingFieldId, dragOffset]);
 
-  // Auto-scroll when dragging near edges — also updates field position each frame
+  const updateDragVisual = useCallback(() => {
+    const pos = computeDragPosition();
+    if (pos) setDragPos(pos);
+  }, [computeDragPosition]);
+
+  // Auto-scroll when dragging near edges — also updates visual position each frame
   const startAutoScroll = useCallback((clientY: number) => {
     const scrollEl = scrollRef.current;
     if (!scrollEl) return;
@@ -97,7 +104,7 @@ export default function DocumentViewer({
       const speed = Math.max(2, (edgeZone - distFromTop) / 3);
       const scroll = () => {
         scrollEl.scrollTop -= speed;
-        updateFieldPosition();
+        updateDragVisual();
         autoScrollRef.current = requestAnimationFrame(scroll);
       };
       autoScrollRef.current = requestAnimationFrame(scroll);
@@ -105,12 +112,12 @@ export default function DocumentViewer({
       const speed = Math.max(2, (edgeZone - distFromBottom) / 3);
       const scroll = () => {
         scrollEl.scrollTop += speed;
-        updateFieldPosition();
+        updateDragVisual();
         autoScrollRef.current = requestAnimationFrame(scroll);
       };
       autoScrollRef.current = requestAnimationFrame(scroll);
     }
-  }, [updateFieldPosition]);
+  }, [updateDragVisual]);
 
   const stopAutoScroll = useCallback(() => {
     if (autoScrollRef.current) {
@@ -161,10 +168,17 @@ export default function DocumentViewer({
     if (!draggingFieldId || !containerRef.current) return;
     const handleMove = (e: MouseEvent) => {
       lastMouseRef.current = { x: e.clientX, y: e.clientY };
-      updateFieldPosition();
+      updateDragVisual();
       startAutoScroll(e.clientY);
     };
-    const handleUp = () => { setDraggingFieldId(null); stopAutoScroll(); };
+    const handleUp = () => {
+      stopAutoScroll();
+      // Save final position to DB only on drop
+      const finalPos = computeDragPosition();
+      if (finalPos) onFieldMove?.(draggingFieldId, finalPos.x, finalPos.y);
+      setDraggingFieldId(null);
+      setDragPos(null);
+    };
     window.addEventListener("mousemove", handleMove);
     window.addEventListener("mouseup", handleUp);
     return () => {
@@ -172,7 +186,7 @@ export default function DocumentViewer({
       window.removeEventListener("mouseup", handleUp);
       stopAutoScroll();
     };
-  }, [draggingFieldId, updateFieldPosition, startAutoScroll, stopAutoScroll]);
+  }, [draggingFieldId, computeDragPosition, updateDragVisual, startAutoScroll, stopAutoScroll, onFieldMove]);
 
   // Resize handlers
   const handleResizeMouseDown = (e: React.MouseEvent, field: STSField) => {
@@ -185,16 +199,30 @@ export default function DocumentViewer({
 
   useEffect(() => {
     if (!resizingFieldId || !containerRef.current) return;
-    const handleMove = (e: MouseEvent) => {
+    const computeResize = (e: MouseEvent) => {
       const rect = containerRef.current!.getBoundingClientRect();
       const dxPct = ((e.clientX - resizeStart.mouseX) / rect.width) * 100;
       const dyPct = ((e.clientY - resizeStart.mouseY) / rect.height) * 100;
-      const newW = Math.max(5, Math.min(80, resizeStart.w + dxPct));
-      const newH = Math.max(3, Math.min(50, resizeStart.h + dyPct));
-      onFieldResize?.(resizingFieldId, newW, newH);
+      return {
+        w: Math.max(5, Math.min(80, resizeStart.w + dxPct)),
+        h: Math.max(3, Math.min(50, resizeStart.h + dyPct)),
+      };
+    };
+    let lastEvent: MouseEvent | null = null;
+    const handleMove = (e: MouseEvent) => {
+      lastEvent = e;
+      setResizePos(computeResize(e));
       startAutoScroll(e.clientY);
     };
-    const handleUp = () => { setResizingFieldId(null); stopAutoScroll(); };
+    const handleUp = () => {
+      stopAutoScroll();
+      if (lastEvent) {
+        const final = computeResize(lastEvent);
+        onFieldResize?.(resizingFieldId, final.w, final.h);
+      }
+      setResizingFieldId(null);
+      setResizePos(null);
+    };
     window.addEventListener("mousemove", handleMove);
     window.addEventListener("mouseup", handleUp);
     return () => {
@@ -202,7 +230,7 @@ export default function DocumentViewer({
       window.removeEventListener("mouseup", handleUp);
       stopAutoScroll();
     };
-  }, [resizingFieldId, resizeStart, onFieldResize]);
+  }, [resizingFieldId, resizeStart, onFieldResize, startAutoScroll, stopAutoScroll]);
 
   const getRecipient = (id: string) => recipients.find((r) => r.id === id);
 
@@ -277,16 +305,18 @@ export default function DocumentViewer({
             const isSignatureType = field.field_type === "signature" || field.field_type === "initials";
             const isCheckbox = field.field_type === "checkbox";
             const displayLabel = isSenderField && field.label ? field.label : FIELD_TYPE_LABELS[field.field_type];
+            const isDragging = draggingFieldId === field.id && dragPos;
+            const isResizing = resizingFieldId === field.id && resizePos;
 
             return (
               <div
                 key={field.id}
-                className={`absolute rounded flex items-center justify-center transition-all ${readOnly ? "overflow-hidden" : ""}`}
+                className={`absolute rounded flex items-center justify-center ${isDragging || isResizing ? "" : "transition-all"} ${readOnly ? "overflow-hidden" : ""}`}
                 style={{
-                  left: `${field.x_position}%`,
-                  top: `${field.y_position}%`,
-                  width: `${field.width}%`,
-                  height: `${field.height}%`,
+                  left: `${isDragging ? dragPos.x : field.x_position}%`,
+                  top: `${isDragging ? dragPos.y : field.y_position}%`,
+                  width: `${isResizing ? resizePos.w : field.width}%`,
+                  height: `${isResizing ? resizePos.h : field.height}%`,
                   borderColor: color,
                   borderWidth: 2,
                   borderStyle: isSenderField || isFilled ? "solid" : "dashed",
