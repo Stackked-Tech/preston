@@ -64,12 +64,23 @@ export default function DocumentViewer({
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const autoScrollRef = useRef<number | null>(null);
+  const lastMouseRef = useRef({ x: 0, y: 0 });
   const [draggingFieldId, setDraggingFieldId] = useState<string | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [resizingFieldId, setResizingFieldId] = useState<string | null>(null);
   const [resizeStart, setResizeStart] = useState({ mouseX: 0, mouseY: 0, w: 0, h: 0 });
 
-  // Auto-scroll when dragging near edges of the scroll container
+  // Compute and apply field position from current mouse + container state
+  const updateFieldPosition = useCallback(() => {
+    if (!draggingFieldId || !containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const { x, y } = lastMouseRef.current;
+    const xPct = ((x - rect.left - dragOffset.x) / rect.width) * 100;
+    const yPct = ((y - rect.top - dragOffset.y) / rect.height) * 100;
+    onFieldMove?.(draggingFieldId, Math.max(0, Math.min(xPct, 95)), Math.max(0, Math.min(yPct, 95)));
+  }, [draggingFieldId, dragOffset, onFieldMove]);
+
+  // Auto-scroll when dragging near edges — also updates field position each frame
   const startAutoScroll = useCallback((clientY: number) => {
     const scrollEl = scrollRef.current;
     if (!scrollEl) return;
@@ -84,6 +95,7 @@ export default function DocumentViewer({
       const speed = Math.max(2, (edgeZone - distFromTop) / 3);
       const scroll = () => {
         scrollEl.scrollTop -= speed;
+        updateFieldPosition();
         autoScrollRef.current = requestAnimationFrame(scroll);
       };
       autoScrollRef.current = requestAnimationFrame(scroll);
@@ -91,11 +103,12 @@ export default function DocumentViewer({
       const speed = Math.max(2, (edgeZone - distFromBottom) / 3);
       const scroll = () => {
         scrollEl.scrollTop += speed;
+        updateFieldPosition();
         autoScrollRef.current = requestAnimationFrame(scroll);
       };
       autoScrollRef.current = requestAnimationFrame(scroll);
     }
-  }, []);
+  }, [updateFieldPosition]);
 
   const stopAutoScroll = useCallback(() => {
     if (autoScrollRef.current) {
@@ -136,6 +149,7 @@ export default function DocumentViewer({
     const rect = containerRef.current?.getBoundingClientRect();
     if (!rect) return;
     setDraggingFieldId(field.id);
+    lastMouseRef.current = { x: e.clientX, y: e.clientY };
     const fieldX = (field.x_position / 100) * rect.width;
     const fieldY = (field.y_position / 100) * rect.height;
     setDragOffset({ x: e.clientX - rect.left - fieldX, y: e.clientY - rect.top - fieldY });
@@ -144,10 +158,8 @@ export default function DocumentViewer({
   useEffect(() => {
     if (!draggingFieldId || !containerRef.current) return;
     const handleMove = (e: MouseEvent) => {
-      const rect = containerRef.current!.getBoundingClientRect();
-      const xPct = ((e.clientX - rect.left - dragOffset.x) / rect.width) * 100;
-      const yPct = ((e.clientY - rect.top - dragOffset.y) / rect.height) * 100;
-      onFieldMove?.(draggingFieldId, Math.max(0, Math.min(xPct, 95)), Math.max(0, Math.min(yPct, 95)));
+      lastMouseRef.current = { x: e.clientX, y: e.clientY };
+      updateFieldPosition();
       startAutoScroll(e.clientY);
     };
     const handleUp = () => { setDraggingFieldId(null); stopAutoScroll(); };
@@ -158,7 +170,7 @@ export default function DocumentViewer({
       window.removeEventListener("mouseup", handleUp);
       stopAutoScroll();
     };
-  }, [draggingFieldId, dragOffset, onFieldMove, startAutoScroll, stopAutoScroll]);
+  }, [draggingFieldId, updateFieldPosition, startAutoScroll, stopAutoScroll]);
 
   // Resize handlers
   const handleResizeMouseDown = (e: React.MouseEvent, field: STSField) => {
