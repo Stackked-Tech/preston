@@ -698,6 +698,7 @@ export default function TemplateBuilder({ templateId, onComplete, onCancel }: Te
                   onFieldMove={handleFieldMove}
                   onFieldResize={handleFieldResize}
                   onFieldClick={handleFieldClick}
+                  onDeleteField={removeTemplateField}
                   highlightRecipientId={selectedRecipientId}
                   zoom={zoom}
                 />

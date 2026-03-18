@@ -430,6 +430,7 @@ export default function EnvelopeWizard({ envelopeId, initialStep, onComplete, on
                   onFieldMove={handleFieldMove}
                   onFieldResize={handleFieldResize}
                   onFieldClick={handleFieldClick}
+                  onDeleteField={removeField}
                   highlightRecipientId={selectedRecipientId}
                   zoom={zoom}
                 />

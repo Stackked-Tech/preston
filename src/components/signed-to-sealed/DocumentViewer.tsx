@@ -37,6 +37,7 @@ interface DocumentViewerProps {
   onDropField?: (fieldType: FieldType, recipientId: string, page: number, xPct: number, yPct: number) => void;
   onFieldMove?: (fieldId: string, xPct: number, yPct: number) => void;
   onFieldResize?: (fieldId: string, width: number, height: number) => void;
+  onDeleteField?: (fieldId: string) => void;
   readOnly?: boolean;
   highlightRecipientId?: string | null;
   zoom?: number;
@@ -53,6 +54,7 @@ export default function DocumentViewer({
   onDropField,
   onFieldMove,
   onFieldResize,
+  onDeleteField,
   readOnly,
   highlightRecipientId,
   zoom = 1,
@@ -279,7 +281,7 @@ export default function DocumentViewer({
             return (
               <div
                 key={field.id}
-                className="absolute rounded flex items-center justify-center transition-all overflow-hidden"
+                className={`absolute rounded flex items-center justify-center transition-all ${readOnly ? "overflow-hidden" : ""}`}
                 style={{
                   left: `${field.x_position}%`,
                   top: `${field.y_position}%`,
@@ -339,6 +341,19 @@ export default function DocumentViewer({
                     }}
                     onMouseDown={(e) => handleResizeMouseDown(e, field)}
                   />
+                )}
+
+                {/* Delete button — top-right corner (edit mode only) */}
+                {!readOnly && onDeleteField && (
+                  <button
+                    className="absolute -top-2 -right-2 w-5 h-5 rounded-full flex items-center justify-center text-white text-xs font-bold leading-none shadow-md hover:scale-110 transition-transform"
+                    style={{ background: "#ef4444", zIndex: 20 }}
+                    onClick={(e) => { e.stopPropagation(); onDeleteField(field.id); }}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    title="Delete field"
+                  >
+                    ×
+                  </button>
                 )}
               </div>
             );
