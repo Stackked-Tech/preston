@@ -152,7 +152,7 @@ export default function DocumentViewer({
   const getRecipient = (id: string) => recipients.find((r) => r.id === id);
 
   return (
-    <div className="flex flex-col">
+    <div className="flex flex-col h-full">
       {/* Page Navigation */}
       <div className="flex items-center justify-between px-4 py-2 border-b" style={{ borderColor: "var(--border-color)" }}>
         <button
