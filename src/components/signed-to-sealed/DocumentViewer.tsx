@@ -62,10 +62,47 @@ export default function DocumentViewer({
   const [pageWidth, setPageWidth] = useState(0);
   const [pageHeight, setPageHeight] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const autoScrollRef = useRef<number | null>(null);
   const [draggingFieldId, setDraggingFieldId] = useState<string | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [resizingFieldId, setResizingFieldId] = useState<string | null>(null);
   const [resizeStart, setResizeStart] = useState({ mouseX: 0, mouseY: 0, w: 0, h: 0 });
+
+  // Auto-scroll when dragging near edges of the scroll container
+  const startAutoScroll = useCallback((clientY: number) => {
+    const scrollEl = scrollRef.current;
+    if (!scrollEl) return;
+    const rect = scrollEl.getBoundingClientRect();
+    const edgeZone = 60;
+    const distFromTop = clientY - rect.top;
+    const distFromBottom = rect.bottom - clientY;
+
+    if (autoScrollRef.current) cancelAnimationFrame(autoScrollRef.current);
+
+    if (distFromTop < edgeZone && scrollEl.scrollTop > 0) {
+      const speed = Math.max(2, (edgeZone - distFromTop) / 3);
+      const scroll = () => {
+        scrollEl.scrollTop -= speed;
+        autoScrollRef.current = requestAnimationFrame(scroll);
+      };
+      autoScrollRef.current = requestAnimationFrame(scroll);
+    } else if (distFromBottom < edgeZone && scrollEl.scrollTop < scrollEl.scrollHeight - scrollEl.clientHeight) {
+      const speed = Math.max(2, (edgeZone - distFromBottom) / 3);
+      const scroll = () => {
+        scrollEl.scrollTop += speed;
+        autoScrollRef.current = requestAnimationFrame(scroll);
+      };
+      autoScrollRef.current = requestAnimationFrame(scroll);
+    }
+  }, []);
+
+  const stopAutoScroll = useCallback(() => {
+    if (autoScrollRef.current) {
+      cancelAnimationFrame(autoScrollRef.current);
+      autoScrollRef.current = null;
+    }
+  }, []);
 
   const onDocumentLoadSuccess = useCallback(({ numPages: n }: { numPages: number }) => {
     setNumPages(n);
@@ -111,15 +148,17 @@ export default function DocumentViewer({
       const xPct = ((e.clientX - rect.left - dragOffset.x) / rect.width) * 100;
       const yPct = ((e.clientY - rect.top - dragOffset.y) / rect.height) * 100;
       onFieldMove?.(draggingFieldId, Math.max(0, Math.min(xPct, 95)), Math.max(0, Math.min(yPct, 95)));
+      startAutoScroll(e.clientY);
     };
-    const handleUp = () => setDraggingFieldId(null);
+    const handleUp = () => { setDraggingFieldId(null); stopAutoScroll(); };
     window.addEventListener("mousemove", handleMove);
     window.addEventListener("mouseup", handleUp);
     return () => {
       window.removeEventListener("mousemove", handleMove);
       window.removeEventListener("mouseup", handleUp);
+      stopAutoScroll();
     };
-  }, [draggingFieldId, dragOffset, onFieldMove]);
+  }, [draggingFieldId, dragOffset, onFieldMove, startAutoScroll, stopAutoScroll]);
 
   // Resize handlers
   const handleResizeMouseDown = (e: React.MouseEvent, field: STSField) => {
@@ -139,13 +178,15 @@ export default function DocumentViewer({
       const newW = Math.max(5, Math.min(80, resizeStart.w + dxPct));
       const newH = Math.max(3, Math.min(50, resizeStart.h + dyPct));
       onFieldResize?.(resizingFieldId, newW, newH);
+      startAutoScroll(e.clientY);
     };
-    const handleUp = () => setResizingFieldId(null);
+    const handleUp = () => { setResizingFieldId(null); stopAutoScroll(); };
     window.addEventListener("mousemove", handleMove);
     window.addEventListener("mouseup", handleUp);
     return () => {
       window.removeEventListener("mousemove", handleMove);
       window.removeEventListener("mouseup", handleUp);
+      stopAutoScroll();
     };
   }, [resizingFieldId, resizeStart, onFieldResize]);
 
@@ -177,13 +218,18 @@ export default function DocumentViewer({
       </div>
 
       {/* PDF + Field Overlay */}
-      <div className="flex-1 overflow-auto flex justify-center p-4" style={{ background: "var(--bg-primary)" }}>
+      <div
+        ref={scrollRef}
+        className="flex-1 overflow-auto flex justify-center p-4"
+        style={{ background: "var(--bg-primary)" }}
+        onDragOver={(e) => { e.preventDefault(); startAutoScroll(e.clientY); }}
+        onDragLeave={stopAutoScroll}
+        onDrop={(e) => { stopAutoScroll(); handlePageDrop(e); }}
+      >
         <div
           ref={containerRef}
           className="relative inline-block"
           style={{ transform: `scale(${zoom})`, transformOrigin: "top center" }}
-          onDragOver={(e) => e.preventDefault()}
-          onDrop={handlePageDrop}
         >
           {pdfReady && Document && Page ? (
             <Document
