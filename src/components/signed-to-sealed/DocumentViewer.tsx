@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect } from "react";
 import type { STSField, STSRecipient, FieldType } from "@/types/signedtosealed";
-import { FIELD_TYPE_LABELS } from "@/types/signedtosealed";
+import { FIELD_TYPE_LABELS, FIELD_DEFAULT_SIZES } from "@/types/signedtosealed";
 
 // react-pdf is loaded dynamically to avoid SSR issues with pdfjs-dist
 let Document: React.ComponentType<any> | null = null;
@@ -146,9 +146,11 @@ export default function DocumentViewer({
     if (!fieldType || !recipientId || !containerRef.current) return;
 
     const rect = containerRef.current.getBoundingClientRect();
-    const xPct = ((e.clientX - rect.left) / rect.width) * 100;
-    const yPct = ((e.clientY - rect.top) / rect.height) * 100;
-    onDropField?.(fieldType, recipientId, currentPage, Math.max(0, Math.min(xPct, 100)), Math.max(0, Math.min(yPct, 100)));
+    const defaults = FIELD_DEFAULT_SIZES[fieldType];
+    // Center the field on the drop point (offset by half the default size)
+    const xPct = ((e.clientX - rect.left) / rect.width) * 100 - defaults.width / 2;
+    const yPct = ((e.clientY - rect.top) / rect.height) * 100 - defaults.height / 2;
+    onDropField?.(fieldType, recipientId, currentPage, Math.max(0, Math.min(xPct, 100 - defaults.width)), Math.max(0, Math.min(yPct, 100 - defaults.height)));
   };
 
   const handleFieldMouseDown = (e: React.MouseEvent, field: STSField) => {

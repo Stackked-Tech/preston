@@ -17,7 +17,7 @@ import type {
   RecipientStatus,
   FillMode,
 } from "@/types/signedtosealed";
-import { RECIPIENT_COLORS } from "@/types/signedtosealed";
+import { RECIPIENT_COLORS, FIELD_DEFAULT_SIZES } from "@/types/signedtosealed";
 import { supabase } from "@/lib/supabase";
 import DocumentViewer from "./DocumentViewer";
 import FieldPalette from "./FieldPalette";
@@ -227,14 +227,7 @@ export default function TemplateBuilder({ templateId, onComplete, onCancel }: Te
     const doc = documents[selectedDocIndex];
     if (!doc) return;
 
-    let width = 25;
-    let height = 6;
-    if (fieldType === "signature") { width = 30; height = 12; }
-    else if (fieldType === "initials") { width = 15; height = 10; }
-    else if (fieldType === "date_signed") { width = 25; height = 6; }
-    else if (fieldType === "text") { width = 30; height = 6; }
-    else if (fieldType === "checkbox") { width = 5; height = 5; }
-    else if (fieldType === "dropdown") { width = 30; height = 6; }
+    const { width, height } = FIELD_DEFAULT_SIZES[fieldType];
 
     await addTemplateField({
       template_id: activeTemplateId,

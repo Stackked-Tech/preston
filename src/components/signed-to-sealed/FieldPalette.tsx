@@ -1,7 +1,8 @@
 "use client";
 
+import { useRef, useEffect } from "react";
 import type { STSRecipient, FieldType } from "@/types/signedtosealed";
-import { FIELD_TYPE_LABELS } from "@/types/signedtosealed";
+import { FIELD_TYPE_LABELS, FIELD_DEFAULT_SIZES } from "@/types/signedtosealed";
 
 interface FieldPaletteProps {
   recipients: STSRecipient[];
@@ -20,6 +21,10 @@ const FIELD_TYPES: { type: FieldType; icon: string }[] = [
   { type: "dropdown", icon: "📋" },
 ];
 
+// PDF page render width used for drag preview sizing
+const PDF_PAGE_WIDTH = 612;
+const PDF_PAGE_HEIGHT = 792;
+
 export default function FieldPalette({
   recipients,
   selectedRecipientId,
@@ -28,12 +33,60 @@ export default function FieldPalette({
   fields = [],
 }: FieldPaletteProps) {
   const signers = recipients.filter((r) => r.role !== "cc");
+  const dragPreviewRef = useRef<HTMLDivElement | null>(null);
+
+  // Clean up drag preview element on unmount
+  useEffect(() => {
+    return () => {
+      if (dragPreviewRef.current) {
+        document.body.removeChild(dragPreviewRef.current);
+        dragPreviewRef.current = null;
+      }
+    };
+  }, []);
 
   const handleDragStart = (e: React.DragEvent, fieldType: FieldType) => {
     if (!selectedRecipientId) return;
     e.dataTransfer.setData("fieldType", fieldType);
     e.dataTransfer.setData("recipientId", selectedRecipientId);
     e.dataTransfer.effectAllowed = "copy";
+
+    // Create a custom drag preview sized to match the actual field on the document
+    const recipient = recipients.find((r) => r.id === selectedRecipientId);
+    const color = recipient?.color_hex || "#6b7280";
+    const defaults = FIELD_DEFAULT_SIZES[fieldType];
+    const previewW = Math.round((defaults.width / 100) * PDF_PAGE_WIDTH);
+    const previewH = Math.round((defaults.height / 100) * PDF_PAGE_HEIGHT);
+
+    // Remove any previous preview
+    if (dragPreviewRef.current) {
+      document.body.removeChild(dragPreviewRef.current);
+    }
+
+    const preview = document.createElement("div");
+    preview.style.cssText = `
+      position: fixed; top: -9999px; left: -9999px;
+      width: ${previewW}px; height: ${previewH}px;
+      border: 2px dashed ${color}; border-radius: 4px;
+      background: ${color}15;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 500; color: ${color};
+      pointer-events: none;
+    `;
+    preview.textContent = FIELD_TYPE_LABELS[fieldType];
+    document.body.appendChild(preview);
+    dragPreviewRef.current = preview;
+
+    // Center the drag image on the cursor
+    e.dataTransfer.setDragImage(preview, previewW / 2, previewH / 2);
+  };
+
+  const handleDragEnd = () => {
+    // Clean up the preview element after drag completes
+    if (dragPreviewRef.current) {
+      document.body.removeChild(dragPreviewRef.current);
+      dragPreviewRef.current = null;
+    }
   };
 
   return (
@@ -82,6 +135,7 @@ export default function FieldPalette({
               key={type}
               draggable={!!selectedRecipientId}
               onDragStart={(e) => handleDragStart(e, type)}
+              onDragEnd={handleDragEnd}
               className="flex items-center gap-1.5 px-2 py-2 rounded border text-xs transition-all"
               style={{
                 background: "var(--card-bg)",

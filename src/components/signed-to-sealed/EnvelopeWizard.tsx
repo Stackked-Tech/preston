@@ -10,7 +10,7 @@ import {
   useAuditLog,
 } from "@/lib/signedToSealedHooks";
 import type { STSDocument, STSField, FieldType, RecipientRole } from "@/types/signedtosealed";
-import { RECIPIENT_COLORS } from "@/types/signedtosealed";
+import { RECIPIENT_COLORS, FIELD_DEFAULT_SIZES } from "@/types/signedtosealed";
 import RecipientManager from "./RecipientManager";
 import DocumentViewer from "./DocumentViewer";
 import FieldPalette from "./FieldPalette";
@@ -130,14 +130,7 @@ export default function EnvelopeWizard({ envelopeId, initialStep, onComplete, on
     const doc = documents[selectedDocIndex];
     if (!doc) return;
 
-    let width = 25;
-    let height = 6;
-    if (fieldType === "signature") { width = 30; height = 12; }
-    else if (fieldType === "initials") { width = 15; height = 10; }
-    else if (fieldType === "date_signed") { width = 25; height = 6; }
-    else if (fieldType === "text") { width = 30; height = 6; }
-    else if (fieldType === "checkbox") { width = 5; height = 5; }
-    else if (fieldType === "dropdown") { width = 30; height = 6; }
+    const { width, height } = FIELD_DEFAULT_SIZES[fieldType];
 
     await addField({
       envelope_id: activeEnvelopeId,
