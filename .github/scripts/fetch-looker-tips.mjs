@@ -173,7 +173,7 @@ try {
         result_maker_id: LOOKER_RESULT_MAKER_ID,
       }],
       context: { id: LOOKER_DASHBOARD_ID, type: "dashboard" },
-      options: { force_run: false, streaming: true, eager_poll: false },
+      options: { force_run: true, streaming: true, eager_poll: false },
     }),
     signal: AbortSignal.timeout(30_000),
   });
