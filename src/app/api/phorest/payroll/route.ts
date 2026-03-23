@@ -154,6 +154,11 @@ export async function POST(request: NextRequest) {
         }
       }
       tipsSource = "looker";
+      // Surface debug info if Looker returned data but no tips matched
+      if (lookerTips.size === 0) {
+        const debug = (lookerTips as Map<string, number> & { _debug?: string })._debug || "no debug";
+        results.warnings.push(`Looker returned 0 tips. Debug: ${debug}`);
+      }
     } catch (err) {
       results.warnings.push(
         `Looker tips unavailable — tips column shows $0. Click each cell to enter tips manually from Phorest. (${err instanceof Error ? err.message : "Unknown"})`

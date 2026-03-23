@@ -376,7 +376,8 @@ async function pollQueryResult(
     for (const obj of objects) {
       if (obj.status === "complete" && obj.data?.data) {
         const results = new Map<string, number>();
-        for (const row of obj.data.data) {
+        const rows = obj.data.data;
+        for (const row of rows) {
           const name = row["staff.staff_name"]?.value;
           const paidToSalon =
             row["purchase_tip_cdc.paid_to_salon"]?.value || 0;
@@ -384,6 +385,11 @@ async function pollQueryResult(
             results.set(name, paidToSalon);
           }
         }
+        // Attach debug metadata so caller can see what Looker returned
+        (results as Map<string, number> & { _debug?: string })._debug =
+          rows.length > 0
+            ? `${rows.length} rows, columns: ${Object.keys(rows[0]).join(", ")}, sample: ${JSON.stringify(rows[0]).substring(0, 400)}`
+            : "0 rows returned";
         return results;
       }
     }
