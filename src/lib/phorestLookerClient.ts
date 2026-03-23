@@ -59,25 +59,9 @@ export async function fetchStaffTips(params: {
   startDate: string;
   endDate: string;
 }): Promise<Map<string, number>> {
-  const MAX_ATTEMPTS = 2;
-  let lastError: Error | undefined;
-
-  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    try {
-      return await fetchStaffTipsOnce(params);
-    } catch (err) {
-      lastError = err instanceof Error ? err : new Error(String(err));
-      const isTimeout =
-        lastError.name === "TimeoutError" ||
-        lastError.message.includes("timeout") ||
-        lastError.message.includes("aborted");
-      if (!isTimeout || attempt === MAX_ATTEMPTS) break;
-      // Brief pause before retry
-      await new Promise((r) => setTimeout(r, 2000 * attempt));
-    }
-  }
-
-  throw lastError!;
+  // Single attempt, no retries — Looker returns 0 rows from Vercel's IPs
+  // so this is best-effort only. Manual tip entry is the reliable fallback.
+  return await fetchStaffTipsOnce(params);
 }
 
 async function fetchStaffTipsOnce(params: {
@@ -344,7 +328,7 @@ async function submitTipsQuery(
 async function pollQueryResult(
   session: LookerSession,
   queryId: string,
-  maxWaitMs = 90_000
+  maxWaitMs = 30_000
 ): Promise<Map<string, number>> {
   const cookieStr = Object.entries(session.cookies)
     .map(([k, v]) => `${k}=${v}`)

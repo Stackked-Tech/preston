@@ -15,7 +15,7 @@ import {
 import { parseColorChargesCSV } from "@/lib/colorChargesParser";
 import { supabase } from "@/lib/supabase";
 
-export const maxDuration = 800; // Max for Vercel Pro — needed for Looker tips on larger branches
+export const maxDuration = 300; // 5 min for Vercel Pro
 
 export async function POST(request: NextRequest) {
   try {
