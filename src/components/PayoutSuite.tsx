@@ -31,6 +31,7 @@ interface BranchResult {
     staffOrder: string[];
     staffConfig: Record<string, StaffMember>;
     warnings: string[];
+    tipsSource: "looker" | "supabase-cache" | "csv-gc-fallback";
     excelBase64: string;
     totalRows: number;
     subsidiaryId: number;
@@ -123,6 +124,10 @@ export default function PayoutSuite() {
 
   // Running state
   const isRunning = Object.values(results).some((r) => r.status === "running");
+
+  // Fetch Tips state
+  const [fetchingTips, setFetchingTips] = useState(false);
+  const [tipsMessage, setTipsMessage] = useState<string | null>(null);
 
   // Computed pay date
   const payDate = endDate ? computePayDate(endDate) : "";
@@ -217,6 +222,38 @@ export default function PayoutSuite() {
 
     await Promise.allSettled(promises);
   }, [startDate, endDate, colorChargesCsvs]);
+
+  // ── Fetch Tips (trigger GitHub Action → Supabase) ──
+  const fetchTips = useCallback(async () => {
+    if (!startDate || !endDate || !activeTab) return;
+    setFetchingTips(true);
+    setTipsMessage(null);
+    try {
+      const res = await fetch("/api/phorest/fetch-tips", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          branchId: activeTab,
+          startDate,
+          endDate,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setTipsMessage(`Error: ${json.error}`);
+      } else {
+        setTipsMessage(
+          "Tips fetch started — re-run payroll in ~60 seconds to see updated tips."
+        );
+      }
+    } catch (err) {
+      setTipsMessage(
+        `Failed: ${err instanceof Error ? err.message : "Network error"}`
+      );
+    } finally {
+      setFetchingTips(false);
+    }
+  }, [startDate, endDate, activeTab]);
 
   // ── Download XLSX ──
   const downloadExcel = useCallback(
@@ -878,7 +915,7 @@ function BranchResults({
         </div>
       </div>
 
-      {/* Warnings */}
+      {/* Warnings + Fetch Tips */}
       {warnings.length > 0 && (
         <div
           className="mb-4 p-3 rounded-lg border text-xs font-sans"
@@ -893,6 +930,32 @@ function BranchResults({
           ))}
         </div>
       )}
+
+      {/* Tips source indicator + Fetch Tips button */}
+      <div className="mb-4 flex items-center gap-3 text-xs font-sans" style={{ color: "var(--text-muted)" }}>
+        <span>
+          Tips source: <strong style={{ color: data.tipsSource === "supabase-cache" ? "#22c55e" : data.tipsSource === "looker" ? "#22c55e" : "#fbbf24" }}>
+            {data.tipsSource === "supabase-cache" ? "Phorest (cached)" : data.tipsSource === "looker" ? "Phorest (live)" : "Manual entry needed"}
+          </strong>
+        </span>
+        <button
+          onClick={fetchTips}
+          disabled={fetchingTips || !startDate || !endDate}
+          className="px-3 py-1 rounded text-xs font-medium transition-all disabled:opacity-40"
+          style={{
+            border: "1px solid var(--border-color)",
+            background: "var(--bg-secondary)",
+            color: "var(--text-primary)",
+          }}
+        >
+          {fetchingTips ? "Fetching..." : "Fetch Tips from Phorest"}
+        </button>
+        {tipsMessage && (
+          <span style={{ color: tipsMessage.startsWith("Error") ? "#ef4444" : "#22c55e" }}>
+            {tipsMessage}
+          </span>
+        )}
+      </div>
 
       {/* Spreadsheet-style table — matches XLSX columns A through AF */}
       <div

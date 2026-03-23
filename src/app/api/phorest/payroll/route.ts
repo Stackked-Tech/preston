@@ -128,41 +128,63 @@ export async function POST(request: NextRequest) {
       results.warnings.push(...colorResult.warnings);
     }
 
-    // 4c. Overlay Looker-sourced tips (Paid to Salon) if available
-    let tipsSource: "looker" | "csv-gc-fallback" = "csv-gc-fallback";
-    try {
-      const lookerTips = await fetchStaffTips({
-        branchId,
-        branchName: branch.name,
-        startDate,
-        endDate,
-      });
+    // 4c. Overlay tips from Supabase cache (populated by GitHub Action) or live Looker
+    let tipsSource: "looker" | "supabase-cache" | "csv-gc-fallback" = "csv-gc-fallback";
+    const resolveName = createStaffNameResolver(
+      Object.keys(branch.staffConfig)
+    );
 
-      // Resolve Looker staff names (may include middle initials) to config names
-      const resolveName = createStaffNameResolver(
-        Object.keys(branch.staffConfig)
-      );
-      // Reset all tips to 0, then apply Looker values
+    // Try Supabase cache first (written by GitHub Action)
+    const { data: cachedTips } = await supabase
+      .from("ps_looker_tips")
+      .select("staff_name, paid_to_salon")
+      .eq("branch_id", branchId)
+      .eq("start_date", startDate)
+      .eq("end_date", endDate);
+
+    if (cachedTips && cachedTips.length > 0) {
       for (const name of Object.keys(results.staffData)) {
         results.staffData[name].tips = 0;
       }
-      for (const [lookerName, paidToSalon] of lookerTips) {
-        const resolved = resolveName(lookerName) || lookerName;
+      for (const row of cachedTips) {
+        const resolved = resolveName(row.staff_name) || row.staff_name;
         if (results.staffData[resolved]) {
           results.staffData[resolved].tips =
-            Math.round(paidToSalon * 100) / 100;
+            Math.round(row.paid_to_salon * 100) / 100;
         }
       }
-      tipsSource = "looker";
-      if (lookerTips.size === 0) {
+      tipsSource = "supabase-cache";
+    } else {
+      // Fall back to live Looker (works locally, usually fails on Vercel)
+      try {
+        const lookerTips = await fetchStaffTips({
+          branchId,
+          branchName: branch.name,
+          startDate,
+          endDate,
+        });
+
+        for (const name of Object.keys(results.staffData)) {
+          results.staffData[name].tips = 0;
+        }
+        for (const [lookerName, paidToSalon] of lookerTips) {
+          const resolved = resolveName(lookerName) || lookerName;
+          if (results.staffData[resolved]) {
+            results.staffData[resolved].tips =
+              Math.round(paidToSalon * 100) / 100;
+          }
+        }
+        tipsSource = "looker";
+        if (lookerTips.size === 0) {
+          results.warnings.push(
+            'No tips found. Click "Fetch Tips" to load from Phorest, or enter manually.'
+          );
+        }
+      } catch (err) {
         results.warnings.push(
-          "Looker returned no tip data for this branch/period. Tips column shows $0 — click each cell to enter tips manually from Phorest."
+          `Tips unavailable — click "Fetch Tips" to load from Phorest, or enter manually. (${err instanceof Error ? err.message : "Unknown"})`
         );
       }
-    } catch (err) {
-      results.warnings.push(
-        `Looker tips unavailable — tips column shows $0. Click each cell to enter tips manually from Phorest. (${err instanceof Error ? err.message : "Unknown"})`
-      );
     }
 
     // 5. Generate Excel

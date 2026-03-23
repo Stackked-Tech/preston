@@ -1,0 +1,39 @@
+name: Fetch Phorest Looker Tips
+
+on:
+  workflow_dispatch:
+    inputs:
+      branchId:
+        description: 'Phorest branch ID'
+        required: true
+      startDate:
+        description: 'Period start (YYYY-MM-DD)'
+        required: true
+      endDate:
+        description: 'Period end (YYYY-MM-DD)'
+        required: true
+
+jobs:
+  fetch-tips:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install @supabase/supabase-js
+
+      - name: Fetch Looker tips
+        env:
+          PHOREST_USER_EMAIL: ${{ secrets.PHOREST_USER_EMAIL }}
+          PHOREST_USER_PASSWORD: ${{ secrets.PHOREST_USER_PASSWORD }}
+          PHOREST_BUSINESS_ID_INTERNAL: ${{ secrets.PHOREST_BUSINESS_ID_INTERNAL }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          INPUT_BRANCH_ID: ${{ inputs.branchId }}
+          INPUT_START_DATE: ${{ inputs.startDate }}
+          INPUT_END_DATE: ${{ inputs.endDate }}
+        run: node .github/scripts/fetch-looker-tips.mjs "$INPUT_BRANCH_ID" "$INPUT_START_DATE" "$INPUT_END_DATE"
