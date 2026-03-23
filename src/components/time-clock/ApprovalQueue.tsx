@@ -67,6 +67,8 @@ function EditableCell({
   );
 }
 
+type ViewMode = "all" | "byDate";
+
 export default function ApprovalQueue({
   entries,
   employees,
@@ -77,6 +79,7 @@ export default function ApprovalQueue({
   onBulkApprove,
   onUpdateEntry,
 }: Props) {
+  const [viewMode, setViewMode] = useState<ViewMode>("all");
   const [selectedDate, setSelectedDate] = useState(getYesterdayDate);
   const [approverName] = useState("Brian");
   const [flagModalEntryId, setFlagModalEntryId] = useState<string | null>(null);
@@ -112,7 +115,23 @@ export default function ApprovalQueue({
     return map;
   }, [jobs]);
 
-  // Filter entries for selected date
+  // All unapproved entries across all dates
+  const allUnapprovedEntries = useMemo(
+    () => entries.filter((e) => e.approval_status === "pending" || e.approval_status === "flagged"),
+    [entries]
+  );
+
+  const allPendingEntries = useMemo(
+    () => entries.filter((e) => e.approval_status === "pending"),
+    [entries]
+  );
+
+  const allFlaggedEntries = useMemo(
+    () => entries.filter((e) => e.approval_status === "flagged"),
+    [entries]
+  );
+
+  // Filter entries for selected date (legacy mode)
   const dateEntries = useMemo(() => {
     return entries.filter((e) => {
       const entryDate = new Date(e.clock_in).toISOString().slice(0, 10);
@@ -120,18 +139,46 @@ export default function ApprovalQueue({
     });
   }, [entries, selectedDate]);
 
+  // Active entries based on view mode
+  const activeEntries = viewMode === "all" ? allUnapprovedEntries : dateEntries;
+
   const pendingEntries = useMemo(
-    () => dateEntries.filter((e) => e.approval_status === "pending"),
-    [dateEntries]
+    () => activeEntries.filter((e) => e.approval_status === "pending"),
+    [activeEntries]
   );
 
   const flaggedEntries = useMemo(
-    () => dateEntries.filter((e) => e.approval_status === "flagged"),
-    [dateEntries]
+    () => activeEntries.filter((e) => e.approval_status === "flagged"),
+    [activeEntries]
   );
 
-  // Group pending by company
+  // Group pending entries by date (newest first), then by company within each date
+  const pendingByDateAndCompany = useMemo(() => {
+    if (viewMode !== "all") return null;
+    const byDate = new Map<string, TCTimeEntry[]>();
+    pendingEntries.forEach((entry) => {
+      const date = new Date(entry.clock_in).toISOString().slice(0, 10);
+      if (!byDate.has(date)) byDate.set(date, []);
+      byDate.get(date)!.push(entry);
+    });
+    // Sort dates newest first
+    const sorted = Array.from(byDate.entries()).sort(([a], [b]) => b.localeCompare(a));
+    return sorted.map(([date, dateEntries]) => {
+      const groups = new Map<string, { company: TCCompany | null; entries: TCTimeEntry[] }>();
+      dateEntries.forEach((entry) => {
+        const emp = employeeMap.get(entry.employee_id);
+        const companyId = emp?.company_id || "unknown";
+        const company = companyId !== "unknown" ? companyMap.get(companyId) || null : null;
+        if (!groups.has(companyId)) groups.set(companyId, { company, entries: [] });
+        groups.get(companyId)!.entries.push(entry);
+      });
+      return { date, companyGroups: Array.from(groups.values()) };
+    });
+  }, [viewMode, pendingEntries, employeeMap, companyMap]);
+
+  // Group pending by company (legacy "by date" mode)
   const pendingByCompany = useMemo(() => {
+    if (viewMode !== "byDate") return [];
     const groups = new Map<string, { company: TCCompany | null; entries: TCTimeEntry[] }>();
     pendingEntries.forEach((entry) => {
       const emp = employeeMap.get(entry.employee_id);
@@ -143,7 +190,7 @@ export default function ApprovalQueue({
       groups.get(companyId)!.entries.push(entry);
     });
     return Array.from(groups.values());
-  }, [pendingEntries, employeeMap, companyMap]);
+  }, [viewMode, pendingEntries, employeeMap, companyMap]);
 
   const handleApprove = async (entryId: string) => {
     setLoadingIds((prev) => new Set(prev).add(entryId));
@@ -468,22 +515,107 @@ export default function ApprovalQueue({
     );
   };
 
+  const formatDateHeader = (dateStr: string) => {
+    const d = new Date(dateStr + "T12:00:00");
+    return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+  };
+
+  /* ─── Render a company group (reused in both modes) ─── */
+  const renderCompanyGroup = (company: TCCompany | null, groupEntries: TCTimeEntry[], keyPrefix: string) => (
+    <div key={`${keyPrefix}-${company?.id || "unknown"}`} className="mb-6">
+      <div
+        className="flex items-center justify-between px-4 py-2.5 rounded-t-lg border border-b-0"
+        style={{ background: "var(--card-bg)", borderColor: "var(--border-color)" }}
+      >
+        <h3
+          className="text-xs font-sans font-medium uppercase tracking-[1.5px]"
+          style={{ color: "var(--text-primary)" }}
+        >
+          {company?.name || "Unknown Company"}
+        </h3>
+        <button
+          onClick={() => handleBulkApprove(groupEntries.map((e) => e.id))}
+          className="text-[10px] font-sans font-medium uppercase tracking-[1px] px-3 py-1 rounded border transition-all"
+          style={{
+            borderColor: "rgba(102,187,106,0.3)",
+            background: "rgba(102,187,106,0.1)",
+            color: "#66bb6a",
+          }}
+        >
+          Approve All ({groupEntries.length})
+        </button>
+      </div>
+      <table
+        className="w-full text-sm font-sans border border-t-0 rounded-b-lg overflow-hidden"
+        style={{ borderCollapse: "collapse", borderColor: "var(--border-color)" }}
+      >
+        <thead>
+          <tr style={{ borderBottom: "1px solid var(--border-color)" }}>
+            {["Resource #", "Name", "Job", "Clock In", "Clock Out", "Hours", "Billable", "Actions"].map((h) => (
+              <th
+                key={h}
+                className="text-left text-[10px] uppercase tracking-[1.5px] font-medium py-2 px-3"
+                style={{ color: "var(--text-muted)" }}
+              >
+                {h}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {groupEntries.map((entry) => renderEntryRow(entry, true))}
+        </tbody>
+      </table>
+    </div>
+  );
+
   return (
     <div className="max-w-5xl">
       {/* Header */}
       <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-4">
-          <input
-            type="date"
-            value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
-            className="px-3 py-2 border rounded text-sm font-sans outline-none"
-            style={{
-              background: "var(--input-bg)",
-              borderColor: "var(--border-light)",
-              color: "var(--text-primary)",
-            }}
-          />
+          {/* View mode toggle */}
+          <div
+            className="flex rounded overflow-hidden border"
+            style={{ borderColor: "var(--border-light)" }}
+          >
+            <button
+              onClick={() => setViewMode("all")}
+              className="text-[10px] font-sans font-medium uppercase tracking-[1px] px-3 py-2 transition-all"
+              style={{
+                background: viewMode === "all" ? "var(--gold)" : "var(--input-bg)",
+                color: viewMode === "all" ? "#000" : "var(--text-muted)",
+              }}
+            >
+              All Unapproved
+            </button>
+            <button
+              onClick={() => setViewMode("byDate")}
+              className="text-[10px] font-sans font-medium uppercase tracking-[1px] px-3 py-2 transition-all"
+              style={{
+                background: viewMode === "byDate" ? "var(--gold)" : "var(--input-bg)",
+                color: viewMode === "byDate" ? "#000" : "var(--text-muted)",
+                borderLeft: "1px solid var(--border-light)",
+              }}
+            >
+              By Date
+            </button>
+          </div>
+
+          {viewMode === "byDate" && (
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              className="px-3 py-2 border rounded text-sm font-sans outline-none"
+              style={{
+                background: "var(--input-bg)",
+                borderColor: "var(--border-light)",
+                color: "var(--text-primary)",
+              }}
+            />
+          )}
+
           <div className="flex items-center gap-3">
             <span
               className="text-[10px] uppercase tracking-[1px] px-2.5 py-1 rounded font-sans font-medium"
@@ -493,9 +625,9 @@ export default function ApprovalQueue({
                 border: "1px solid rgba(66,165,245,0.2)",
               }}
             >
-              {pendingEntries.length} Pending
+              {viewMode === "all" ? allPendingEntries.length : pendingEntries.length} Pending
             </span>
-            {flaggedEntries.length > 0 && (
+            {(viewMode === "all" ? allFlaggedEntries.length : flaggedEntries.length) > 0 && (
               <span
                 className="text-[10px] uppercase tracking-[1px] px-2.5 py-1 rounded font-sans font-medium"
                 style={{
@@ -504,82 +636,73 @@ export default function ApprovalQueue({
                   border: "1px solid rgba(255,183,77,0.2)",
                 }}
               >
-                {flaggedEntries.length} Flagged
+                {viewMode === "all" ? allFlaggedEntries.length : flaggedEntries.length} Flagged
               </span>
             )}
           </div>
         </div>
+
+        {/* Approve All across all dates */}
+        {viewMode === "all" && allPendingEntries.length > 0 && (
+          <button
+            onClick={() => handleBulkApprove(allPendingEntries.map((e) => e.id))}
+            disabled={loadingIds.has("approve-all")}
+            className="text-[10px] font-sans font-medium uppercase tracking-[1px] px-4 py-2 rounded border transition-all disabled:opacity-40"
+            style={{
+              borderColor: "rgba(102,187,106,0.3)",
+              background: "rgba(102,187,106,0.1)",
+              color: "#66bb6a",
+            }}
+          >
+            Approve All ({allPendingEntries.length})
+          </button>
+        )}
       </div>
 
-      {/* Pending entries grouped by company */}
-      {pendingByCompany.length > 0 ? (
-        pendingByCompany.map(({ company, entries: groupEntries }) => (
-          <div key={company?.id || "unknown"} className="mb-6">
-            {/* Company group header */}
+      {/* "All Unapproved" mode — grouped by date, then by company */}
+      {viewMode === "all" && (
+        <>
+          {pendingByDateAndCompany && pendingByDateAndCompany.length > 0 ? (
+            pendingByDateAndCompany.map(({ date, companyGroups }) => (
+              <div key={date} className="mb-8">
+                <h2
+                  className="text-[11px] font-sans font-medium uppercase tracking-[2px] mb-3 pb-2"
+                  style={{ color: "var(--gold)", borderBottom: "1px solid var(--border-light)" }}
+                >
+                  {formatDateHeader(date)}
+                </h2>
+                {companyGroups.map(({ company, entries: groupEntries }) =>
+                  renderCompanyGroup(company, groupEntries, date)
+                )}
+              </div>
+            ))
+          ) : (
             <div
-              className="flex items-center justify-between px-4 py-2.5 rounded-t-lg border border-b-0"
-              style={{
-                background: "var(--card-bg)",
-                borderColor: "var(--border-color)",
-              }}
+              className="py-12 text-center text-sm font-sans"
+              style={{ color: "var(--text-muted)" }}
             >
-              <h3
-                className="text-xs font-sans font-medium uppercase tracking-[1.5px]"
-                style={{ color: "var(--text-primary)" }}
-              >
-                {company?.name || "Unknown Company"}
-              </h3>
-              <button
-                onClick={() =>
-                  handleBulkApprove(groupEntries.map((e) => e.id))
-                }
-                className="text-[10px] font-sans font-medium uppercase tracking-[1px] px-3 py-1 rounded border transition-all"
-                style={{
-                  borderColor: "rgba(102,187,106,0.3)",
-                  background: "rgba(102,187,106,0.1)",
-                  color: "#66bb6a",
-                }}
-              >
-                Approve All ({groupEntries.length})
-              </button>
+              No pending entries.
             </div>
+          )}
+        </>
+      )}
 
-            {/* Entry table */}
-            <table
-              className="w-full text-sm font-sans border border-t-0 rounded-b-lg overflow-hidden"
-              style={{
-                borderCollapse: "collapse",
-                borderColor: "var(--border-color)",
-              }}
+      {/* "By Date" mode — original behavior */}
+      {viewMode === "byDate" && (
+        <>
+          {pendingByCompany.length > 0 ? (
+            pendingByCompany.map(({ company, entries: groupEntries }) =>
+              renderCompanyGroup(company, groupEntries, "byDate")
+            )
+          ) : (
+            <div
+              className="py-12 text-center text-sm font-sans"
+              style={{ color: "var(--text-muted)" }}
             >
-              <thead>
-                <tr style={{ borderBottom: "1px solid var(--border-color)" }}>
-                  {["Resource #", "Name", "Job", "Clock In", "Clock Out", "Hours", "Billable", "Actions"].map(
-                    (h) => (
-                      <th
-                        key={h}
-                        className="text-left text-[10px] uppercase tracking-[1.5px] font-medium py-2 px-3"
-                        style={{ color: "var(--text-muted)" }}
-                      >
-                        {h}
-                      </th>
-                    )
-                  )}
-                </tr>
-              </thead>
-              <tbody>
-                {groupEntries.map((entry) => renderEntryRow(entry, true))}
-              </tbody>
-            </table>
-          </div>
-        ))
-      ) : (
-        <div
-          className="py-12 text-center text-sm font-sans"
-          style={{ color: "var(--text-muted)" }}
-        >
-          No pending entries for this date.
-        </div>
+              No pending entries for this date.
+            </div>
+          )}
+        </>
       )}
 
       {/* Flagged Entries Section */}
