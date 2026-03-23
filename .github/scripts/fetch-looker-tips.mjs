@@ -208,15 +208,20 @@ try {
 
     for (const obj of objects) {
       if (obj.status === "complete" && obj.data?.data) {
-        for (const row of obj.data.data) {
+        const rows = obj.data.data;
+        // Debug: show column keys and sample row
+        if (rows.length > 0) {
+          console.log(`  Columns: ${Object.keys(rows[0]).join(", ")}`);
+          console.log(`  Sample row: ${JSON.stringify(rows[0])}`);
+        }
+        for (const row of rows) {
           const name = row["staff.staff_name"]?.value;
           const paidToSalon = row["purchase_tip_cdc.paid_to_salon"]?.value || 0;
           if (name && paidToSalon > 0) {
             tips.set(name, paidToSalon);
           }
         }
-        // Found results (even if empty map)
-        console.log(`  Found ${tips.size} staff with tips from ${obj.data.data.length} rows`);
+        console.log(`  Found ${tips.size} staff with tips from ${rows.length} rows`);
 
         // Step 6: Write to Supabase
         console.log("  Step 6: Writing to Supabase...");
