@@ -341,34 +341,16 @@ export function processCSV(
     }
   }
 
-  // ── Resolve new-guest candidates: credit only the earliest stylist per client ──
-  for (const [clientKey, candidates] of newGuestCandidates) {
-    // Sort by purchase_time ascending, then staff name for deterministic tie-breaking
-    candidates.sort((a, b) => {
-      const timeCmp = a.purchaseTime.localeCompare(b.purchaseTime);
-      if (timeCmp !== 0) return timeCmp;
-      return a.staffName.localeCompare(b.staffName);
-    });
-
-    // The earliest stylist gets ALL the new-guest credit for this client
-    const winner = candidates[0].staffName;
-    const totalUnitPrice = candidates
-      .filter((c) => c.staffName === winner)
-      .reduce((sum, c) => sum + c.unitPrice, 0);
-
-    if (staffData[winner]) {
-      staffData[winner].newGuests += totalUnitPrice;
+  // ── Resolve new-guest candidates: each stylist gets credit for their own services ──
+  for (const [, candidates] of newGuestCandidates) {
+    // Group by stylist and credit each with their own service totals
+    const byStaff = new Map<string, number>();
+    for (const c of candidates) {
+      byStaff.set(c.staffName, (byStaff.get(c.staffName) || 0) + c.unitPrice);
     }
-
-    // Warn if multiple stylists had the exact same timestamp
-    const uniqueStylists = new Set(candidates.map((c) => c.staffName));
-    if (uniqueStylists.size > 1) {
-      const [clientName] = clientKey.split("|");
-      const tiedStylists = candidates.filter((c) => c.purchaseTime === candidates[0].purchaseTime).map((c) => c.staffName);
-      if (new Set(tiedStylists).size > 1) {
-        warnings.push(
-          `New guest "${clientName}" had same timestamp for ${[...new Set(tiedStylists)].join(" & ")} — credited ${winner} (alphabetical tie-break)`
-        );
+    for (const [stylist, total] of byStaff) {
+      if (staffData[stylist]) {
+        staffData[stylist].newGuests += total;
       }
     }
   }
