@@ -209,10 +209,13 @@ try {
     for (const obj of objects) {
       if (obj.status === "complete" && obj.data?.data) {
         const rows = obj.data.data;
-        // Debug: show column keys and sample row
-        if (rows.length > 0) {
-          console.log(`  Columns: ${Object.keys(rows[0]).join(", ")}`);
-          console.log(`  Sample row: ${JSON.stringify(rows[0])}`);
+        // Debug: show all rows with their tip values
+        for (const row of rows) {
+          const n = row["staff.staff_name"]?.value || "?";
+          const pts = row["purchase_tip_cdc.paid_to_salon"]?.value || 0;
+          const ptstaff = row["purchase_tip_cdc.paid_to_staff"]?.value || 0;
+          const total = row["purchase_tip_cdc.total_tips"]?.value || 0;
+          console.log(`  ${n}: total=$${total}, paid_to_salon=$${pts}, paid_to_staff=$${ptstaff}`);
         }
         for (const row of rows) {
           const name = row["staff.staff_name"]?.value;
