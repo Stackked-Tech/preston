@@ -51,9 +51,36 @@ const LOOKER_BASE = "https://looker.phorest.com";
 /**
  * Fetch "Paid to Salon" tip amounts per staff from Phorest's Looker Staff Tips report.
  * Returns a Map of Looker staff name (may include middle initials) → paidToSalon amount.
- * Throws on any failure — caller should catch and fall back.
+ * Retries up to 2 times on timeout/transient failures before throwing.
  */
 export async function fetchStaffTips(params: {
+  branchId: string;
+  branchName: string;
+  startDate: string;
+  endDate: string;
+}): Promise<Map<string, number>> {
+  const MAX_ATTEMPTS = 3;
+  let lastError: Error | undefined;
+
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      return await fetchStaffTipsOnce(params);
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      const isTimeout =
+        lastError.name === "TimeoutError" ||
+        lastError.message.includes("timeout") ||
+        lastError.message.includes("aborted");
+      if (!isTimeout || attempt === MAX_ATTEMPTS) break;
+      // Brief pause before retry
+      await new Promise((r) => setTimeout(r, 2000 * attempt));
+    }
+  }
+
+  throw lastError!;
+}
+
+async function fetchStaffTipsOnce(params: {
   branchId: string;
   branchName: string;
   startDate: string;
@@ -133,7 +160,7 @@ async function getOAuthToken(
         username: email,
         password,
       }),
-      signal: AbortSignal.timeout(10_000),
+      signal: AbortSignal.timeout(15_000),
     }
   );
 
@@ -179,7 +206,7 @@ async function getLookerSignedUrl(
         branchTimeZone: params.timezone,
         dashboardId: LOOKER_DASHBOARD_ID,
       }),
-      signal: AbortSignal.timeout(10_000),
+      signal: AbortSignal.timeout(15_000),
     }
   );
 
@@ -207,7 +234,7 @@ async function establishLookerSession(
       const res = await fetch(url, {
         redirect: "manual",
         headers: cookieStr ? { Cookie: cookieStr } : {},
-        signal: AbortSignal.timeout(10_000),
+        signal: AbortSignal.timeout(20_000),
       });
 
       // Collect cookies
@@ -294,7 +321,7 @@ async function submitTipsQuery(
           eager_poll: false,
         },
       }),
-      signal: AbortSignal.timeout(15_000),
+      signal: AbortSignal.timeout(30_000),
     }
   );
 
@@ -317,7 +344,7 @@ async function submitTipsQuery(
 async function pollQueryResult(
   session: LookerSession,
   queryId: string,
-  maxWaitMs = 45_000
+  maxWaitMs = 90_000
 ): Promise<Map<string, number>> {
   const cookieStr = Object.entries(session.cookies)
     .map(([k, v]) => `${k}=${v}`)
@@ -337,7 +364,7 @@ async function pollQueryResult(
           Cookie: cookieStr,
           "x-csrf-token": session.csrfToken,
         },
-        signal: AbortSignal.timeout(10_000),
+        signal: AbortSignal.timeout(20_000),
       }
     );
 
