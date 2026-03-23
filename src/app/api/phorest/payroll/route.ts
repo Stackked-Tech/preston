@@ -154,10 +154,10 @@ export async function POST(request: NextRequest) {
         }
       }
       tipsSource = "looker";
-      // Surface debug info if Looker returned data but no tips matched
       if (lookerTips.size === 0) {
-        const debug = (lookerTips as Map<string, number> & { _debug?: string })._debug || "no debug";
-        results.warnings.push(`Looker returned 0 tips. Debug: ${debug}`);
+        results.warnings.push(
+          "Looker returned no tip data for this branch/period. Tips column shows $0 — click each cell to enter tips manually from Phorest."
+        );
       }
     } catch (err) {
       results.warnings.push(

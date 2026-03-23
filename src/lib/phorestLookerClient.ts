@@ -385,10 +385,10 @@ async function pollQueryResult(
             results.set(name, paidToSalon);
           }
         }
-        // Attach debug metadata so caller can see what Looker returned
+        // Attach debug metadata for diagnostics
         (results as Map<string, number> & { _debug?: string })._debug =
           rows.length > 0
-            ? `${rows.length} rows, columns: ${Object.keys(rows[0]).join(", ")}, sample: ${JSON.stringify(rows[0]).substring(0, 400)}`
+            ? `${rows.length} rows, columns: ${Object.keys(rows[0]).join(", ")}`
             : "0 rows returned";
         return results;
       }
