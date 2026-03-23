@@ -175,7 +175,7 @@ try {
       context: { id: LOOKER_DASHBOARD_ID, type: "dashboard" },
       options: { force_run: true, streaming: true, eager_poll: false },
     }),
-    signal: AbortSignal.timeout(30_000),
+    signal: AbortSignal.timeout(60_000),
   });
   if (!queryRes.ok) throw new Error(`Query submit failed: ${queryRes.status}`);
   const queryText = await queryRes.text();
@@ -186,7 +186,7 @@ try {
   // Step 5: Poll for results
   console.log("  Step 5: Polling for results...");
   const tips = new Map();
-  const maxWaitMs = 60_000;
+  const maxWaitMs = 120_000;
   const start = Date.now();
   let delay = 1000;
 
