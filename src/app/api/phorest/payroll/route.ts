@@ -156,7 +156,7 @@ export async function POST(request: NextRequest) {
       tipsSource = "looker";
     } catch (err) {
       results.warnings.push(
-        `Looker tips unavailable, using GC-based fallback: ${err instanceof Error ? err.message : "Unknown"}`
+        `Looker tips unavailable — tips column shows $0. Click each cell to enter tips manually from Phorest. (${err instanceof Error ? err.message : "Unknown"})`
       );
     }
 

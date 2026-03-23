@@ -59,7 +59,7 @@ export async function fetchStaffTips(params: {
   startDate: string;
   endDate: string;
 }): Promise<Map<string, number>> {
-  const MAX_ATTEMPTS = 3;
+  const MAX_ATTEMPTS = 2;
   let lastError: Error | undefined;
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
