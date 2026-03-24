@@ -215,12 +215,12 @@ export const FIELD_TYPE_LABELS: Record<FieldType, string> = {
 
 /** Default width/height (% of page) for each field type when dropped onto a document */
 export const FIELD_DEFAULT_SIZES: Record<FieldType, { width: number; height: number }> = {
-  signature:   { width: 30,   height: 8 },
-  initials:    { width: 14,   height: 8 },
-  date_signed: { width: 20,   height: 4 },
-  text:        { width: 26,   height: 4 },
-  checkbox:    { width: 3.5,  height: 3 },
-  dropdown:    { width: 26,   height: 4 },
+  signature:   { width: 16.8235, height: 3.52222 },
+  initials:    { width: 6.25425, height: 3.52222 },
+  date_signed: { width: 12,      height: 3.52222 },
+  text:        { width: 16.8235, height: 3.52222 },
+  checkbox:    { width: 3.52222, height: 3.52222 },
+  dropdown:    { width: 16.8235, height: 3.52222 },
 };
 
 export const STATUS_LABELS: Record<EnvelopeStatus, string> = {
