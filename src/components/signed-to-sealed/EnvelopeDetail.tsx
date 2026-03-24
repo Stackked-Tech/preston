@@ -426,14 +426,17 @@ export default function EnvelopeDetail({ envelopeId, onBack, onEdit }: EnvelopeD
                       <button onClick={() => setEditingEmailId(null)} className="text-[10px] px-1.5 py-0.5 rounded" style={{ color: "var(--text-muted)" }}>Cancel</button>
                     </div>
                   ) : (
-                    <p
-                      className="text-[10px] truncate cursor-pointer hover:underline"
-                      style={{ color: r.email && isValidEmail(r.email) ? "var(--text-muted)" : "#ef4444" }}
+                    <button
+                      className="flex items-center gap-1 text-[10px] truncate cursor-pointer hover:underline"
+                      style={{ color: r.email && isValidEmail(r.email) ? "var(--text-muted)" : "#ef4444", background: "none", border: "none", padding: 0 }}
                       onClick={() => startEditEmail(r)}
                       title="Click to edit email"
                     >
-                      {r.email || "No email — click to add"}
-                    </p>
+                      <span>{r.email || "No email — click to add"}</span>
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, opacity: 0.6 }}>
+                        <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+                      </svg>
+                    </button>
                   )}
                   <p className="text-[10px] font-mono truncate mt-0.5" style={{ color: "var(--text-muted)", opacity: 0.6 }}>
                     {getSigningLink(r)}
