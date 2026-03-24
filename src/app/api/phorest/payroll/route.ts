@@ -155,7 +155,8 @@ export async function POST(request: NextRequest) {
         results.staffData[name].tips = 0;
       }
       for (const row of tipRows) {
-        const resolved = resolveName(row.staff_name) || row.staff_name;
+        const cleanName = row.staff_name.replace(/\s+/g, " ").trim();
+        const resolved = resolveName(cleanName) || cleanName;
         if (results.staffData[resolved]) {
           results.staffData[resolved].tips =
             Math.round(row.paid_to_salon * 100) / 100;
