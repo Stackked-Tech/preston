@@ -117,6 +117,30 @@ export default function PayoutSuite() {
     [BRANCHES]
   );
 
+  // Which branches to include in next payroll run
+  const [selectedBranches, setSelectedBranches] = useState<Set<string>>(
+    new Set()
+  );
+
+  // Auto-select configured branches when they load
+  useEffect(() => {
+    if (BRANCHES.length > 0 && selectedBranches.size === 0) {
+      const configured = BRANCHES.filter((b) =>
+        Object.keys(b.staffConfig).length > 0
+      ).map((b) => b.branchId);
+      setSelectedBranches(new Set(configured));
+    }
+  }, [BRANCHES]);
+
+  const toggleBranch = useCallback((branchId: string) => {
+    setSelectedBranches((prev) => {
+      const next = new Set(prev);
+      if (next.has(branchId)) next.delete(branchId);
+      else next.add(branchId);
+      return next;
+    });
+  }, []);
+
   // Color charges CSV per branch (keyed by branchId)
   const [colorChargesCsvs, setColorChargesCsvs] = useState<
     Record<string, string>
@@ -161,24 +185,24 @@ export default function PayoutSuite() {
     });
   }, []);
 
-  // ── Run payroll for all configured branches ──
+  // ── Run payroll for selected branches ──
   const runPayroll = useCallback(async () => {
-    if (!startDate || !endDate) return;
+    if (!startDate || !endDate || selectedBranches.size === 0) return;
 
-    // Reset all configured branches to running
+    // Reset selected branches to running
     setResults((prev) => {
       const next = { ...prev };
       for (const b of BRANCHES) {
-        if (isBranchConfigured(b.branchId)) {
+        if (selectedBranches.has(b.branchId)) {
           next[b.branchId] = { status: "running" };
         }
       }
       return next;
     });
 
-    // Fire all configured branches in parallel
+    // Fire selected branches in parallel
     const promises = BRANCHES.filter((b) =>
-      isBranchConfigured(b.branchId)
+      selectedBranches.has(b.branchId)
     ).map(async (branch) => {
       try {
         const res = await fetch("/api/phorest/payroll", {
@@ -221,7 +245,7 @@ export default function PayoutSuite() {
     });
 
     await Promise.allSettled(promises);
-  }, [startDate, endDate, colorChargesCsvs]);
+  }, [startDate, endDate, colorChargesCsvs, selectedBranches, BRANCHES]);
 
   // ── Fetch Tips (trigger GitHub Action → Supabase) ──
   const fetchTips = useCallback(async () => {
@@ -410,14 +434,18 @@ export default function PayoutSuite() {
 
         <button
           onClick={runPayroll}
-          disabled={!startDate || !endDate || isRunning}
+          disabled={!startDate || !endDate || isRunning || selectedBranches.size === 0}
           className="px-6 py-2 rounded-md text-sm font-sans font-medium tracking-wide transition-all disabled:opacity-40 disabled:cursor-not-allowed"
           style={{
             background: "var(--gold)",
             color: "#0a0b0e",
           }}
         >
-          {isRunning ? "Processing..." : "Run Payroll"}
+          {isRunning
+            ? "Processing..."
+            : selectedBranches.size === 1
+              ? `Run Payroll (1 location)`
+              : `Run Payroll (${selectedBranches.size} locations)`}
         </button>
       </div>
 
@@ -430,39 +458,57 @@ export default function PayoutSuite() {
           const result = results[branch.branchId];
           const isActive = activeTab === branch.branchId;
           const configured = isBranchConfigured(branch.branchId);
+          const isSelected = selectedBranches.has(branch.branchId);
 
           return (
-            <button
+            <div
               key={branch.branchId}
-              onClick={() => setActiveTab(branch.branchId)}
-              className="px-5 py-3 text-xs font-sans tracking-wide whitespace-nowrap transition-all relative"
+              className="flex items-center relative"
               style={{
-                color: isActive
-                  ? "var(--gold)"
-                  : configured
-                    ? "var(--text-secondary)"
-                    : "var(--text-muted)",
                 borderBottom: isActive
                   ? "2px solid var(--gold)"
                   : "2px solid transparent",
-                opacity: configured ? 1 : 0.5,
               }}
             >
-              {branch.name}
-              {result?.status === "running" && (
-                <span className="ml-2 inline-block w-2 h-2 rounded-full animate-pulse" style={{ background: "var(--gold)" }} />
+              {configured && (
+                <input
+                  type="checkbox"
+                  checked={isSelected}
+                  onChange={() => toggleBranch(branch.branchId)}
+                  className="ml-3 accent-[var(--gold)] cursor-pointer"
+                  style={{ width: 14, height: 14 }}
+                  title={isSelected ? `Exclude ${branch.name}` : `Include ${branch.name}`}
+                />
               )}
-              {result?.status === "done" && (
-                <span className="ml-2" style={{ color: "#4ade80" }}>
-                  ✓
-                </span>
-              )}
-              {result?.status === "error" && (
-                <span className="ml-2" style={{ color: "#f87171" }}>
-                  ✗
-                </span>
-              )}
-            </button>
+              <button
+                onClick={() => setActiveTab(branch.branchId)}
+                className="px-4 py-3 text-xs font-sans tracking-wide whitespace-nowrap transition-all"
+                style={{
+                  color: isActive
+                    ? "var(--gold)"
+                    : configured
+                      ? "var(--text-secondary)"
+                      : "var(--text-muted)",
+                  opacity: configured ? 1 : 0.5,
+                  paddingLeft: configured ? "0.5rem" : "1.25rem",
+                }}
+              >
+                {branch.name}
+                {result?.status === "running" && (
+                  <span className="ml-2 inline-block w-2 h-2 rounded-full animate-pulse" style={{ background: "var(--gold)" }} />
+                )}
+                {result?.status === "done" && (
+                  <span className="ml-2" style={{ color: "#4ade80" }}>
+                    ✓
+                  </span>
+                )}
+                {result?.status === "error" && (
+                  <span className="ml-2" style={{ color: "#f87171" }}>
+                    ✗
+                  </span>
+                )}
+              </button>
+            </div>
           );
         })}
       </div>
@@ -595,6 +641,10 @@ export default function PayoutSuite() {
           <BranchResults
             data={activeResult.data}
             onDownload={() => downloadExcel(activeTab)}
+            onFetchTips={fetchTips}
+            fetchingTips={fetchingTips}
+            tipsMessage={tipsMessage}
+            canFetchTips={!!startDate && !!endDate}
           />
         )}
 
@@ -756,9 +806,17 @@ function EditableCell({
 function BranchResults({
   data,
   onDownload,
+  onFetchTips,
+  fetchingTips,
+  tipsMessage,
+  canFetchTips,
 }: {
   data: NonNullable<BranchResult["data"]>;
   onDownload: () => void;
+  onFetchTips: () => void;
+  fetchingTips: boolean;
+  tipsMessage: string | null;
+  canFetchTips: boolean;
 }) {
   const { staffData, staffOrder, staffConfig, warnings } = data;
 
@@ -939,8 +997,8 @@ function BranchResults({
           </strong>
         </span>
         <button
-          onClick={fetchTips}
-          disabled={fetchingTips || !startDate || !endDate}
+          onClick={onFetchTips}
+          disabled={fetchingTips || !canFetchTips}
           className="px-3 py-1 rounded text-xs font-medium transition-all disabled:opacity-40"
           style={{
             border: "1px solid var(--border-color)",
