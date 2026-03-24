@@ -821,6 +821,8 @@ function BranchResults({
   const { staffData, staffOrder, staffConfig, warnings } = data;
 
   const [overrides, setOverrides] = useState<Record<string, PayrollOverrides>>({});
+  const [subsidiaryOverride, setSubsidiaryOverride] = useState<number | null>(null);
+  const effectiveSubsidiaryId = subsidiaryOverride ?? data.subsidiaryId;
 
   const setOverride = useCallback((staffName: string, field: keyof PayrollOverrides, value: number) => {
     setOverrides((prev) => ({
@@ -880,13 +882,13 @@ function BranchResults({
   });
 
   const handleDownload = useCallback(async () => {
-    if (Object.keys(overrides).length === 0) {
+    if (Object.keys(overrides).length === 0 && subsidiaryOverride === null) {
       onDownload();
       return;
     }
 
     const finalRows: FinalPayrollRow[] = rows.map((r) => ({
-      subsidiaryId: data.subsidiaryId,
+      subsidiaryId: effectiveSubsidiaryId,
       internalId: r.cfg.internalId,
       targetFirst: r.cfg.targetFirst,
       targetLast: r.cfg.targetLast,
@@ -913,7 +915,7 @@ function BranchResults({
       payDate: data.payDate,
       postingPeriod: data.postingPeriod,
       account: data.account,
-      subsidiaryId: data.subsidiaryId,
+      subsidiaryId: effectiveSubsidiaryId,
     });
 
     const blob = new Blob([xlsxBytes.buffer as ArrayBuffer], {
@@ -946,17 +948,33 @@ function BranchResults({
             {data.branchName}
           </h2>
           <p
-            className="text-xs font-sans m-0 mt-1"
+            className="text-xs font-sans m-0 mt-1 flex items-center gap-1 flex-wrap"
             style={{ color: "var(--text-muted)" }}
           >
             Pay Period: {data.payPeriod} &middot; Pay Date: {data.payDate}{" "}
             &middot; {data.totalRows} transactions processed
+            &middot; Subsidiary:{" "}
+            <input
+              type="number"
+              value={effectiveSubsidiaryId}
+              onChange={(e) => {
+                const v = parseInt(e.target.value);
+                if (!isNaN(v)) setSubsidiaryOverride(v);
+              }}
+              className="w-12 text-center text-xs font-sans rounded border outline-none"
+              style={{
+                background: subsidiaryOverride !== null ? "rgba(212, 175, 55, 0.08)" : "transparent",
+                borderColor: subsidiaryOverride !== null ? "var(--gold)" : "var(--border-light)",
+                color: "var(--text-primary)",
+              }}
+              title={subsidiaryOverride !== null ? `DB value: ${data.subsidiaryId} (overridden)` : "Click to edit"}
+            />
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {Object.keys(overrides).length > 0 && (
+          {(Object.keys(overrides).length > 0 || subsidiaryOverride !== null) && (
             <button
-              onClick={() => setOverrides({})}
+              onClick={() => { setOverrides({}); setSubsidiaryOverride(null); }}
               className="px-3 py-2 rounded-md text-xs font-sans font-medium tracking-wide transition-all border"
               style={{ borderColor: "var(--border-light)", color: "var(--text-secondary)" }}
             >
@@ -1143,7 +1161,7 @@ function BranchResults({
                   style={{ borderColor: "var(--border-light)" }}
                 >
                   {/* A: Subsidiary ID */}
-                  <td className={dc} style={{ color: "var(--text-muted)" }}>{data.subsidiaryId}</td>
+                  <td className={dc} style={{ color: "var(--text-muted)" }}>{effectiveSubsidiaryId}</td>
                   {/* B: Internal ID */}
                   <td className={dc} style={{ color: "var(--text-muted)" }}>{r.cfg.internalId || ""}</td>
                   {/* C: First Names */}

@@ -84,8 +84,7 @@ export function computePayPeriodConfig(
   // Pay period label
   const startDate = new Date(periodStart + "T12:00:00");
   const endDate = new Date(periodEnd + "T12:00:00");
-  const labelStart = startDate.getDate() <= 15 ? 1 : 16;
-  const payPeriodLabel = `${startDate.getMonth() + 1}/${labelStart}-${endDate.getDate()}/${endDate.getFullYear()}`;
+  const payPeriodLabel = `${startDate.getMonth() + 1}/${startDate.getDate()}-${endDate.getDate()}/${endDate.getFullYear()}`;
 
   const payDate = computePayDate(periodEnd);
 
