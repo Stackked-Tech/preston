@@ -79,6 +79,7 @@ function StaffModal({
     sort_order: staff?.sort_order?.toString() ?? "0",
     email: staff?.email ?? "",
     status: (staff?.status || 'active') as string,
+    exclude_from_payroll: staff?.exclude_from_payroll ?? false,
   });
   const [saving, setSaving] = useState(false);
 
@@ -105,6 +106,7 @@ function StaffModal({
         email: form.email.trim() || null,
         sort_order: Number(form.sort_order) || 0,
         is_active: form.status === 'active' || form.status === 'onboarding',
+        exclude_from_payroll: form.exclude_from_payroll,
         status: form.status as EAStaffStatus,
       };
 
@@ -286,6 +288,38 @@ function StaffModal({
             </select>
           </div>
         )}
+
+        {/* Exclude from Payroll toggle */}
+        <div className="mt-4">
+          <label
+            className="flex items-center gap-3 cursor-pointer select-none"
+            style={{ color: "var(--text-secondary)" }}
+          >
+            <div
+              className="relative inline-flex items-center rounded-full transition-colors"
+              style={{
+                width: 36,
+                height: 20,
+                background: form.exclude_from_payroll ? "var(--gold)" : "var(--border-color)",
+              }}
+              onClick={() => setForm((f) => ({ ...f, exclude_from_payroll: !f.exclude_from_payroll }))}
+            >
+              <div
+                className="absolute rounded-full bg-white transition-transform"
+                style={{
+                  width: 16,
+                  height: 16,
+                  top: 2,
+                  left: form.exclude_from_payroll ? 18 : 2,
+                }}
+              />
+            </div>
+            <span className="text-sm">Exclude from Payroll</span>
+          </label>
+          <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
+            Staff excluded from payroll will still appear in Employee Admin but won&apos;t show in Payout Suite.
+          </p>
+        </div>
 
         {/* Actions */}
         <div className="mt-5 flex justify-end gap-3">
@@ -703,6 +737,18 @@ export default function EmployeeAdmin() {
                               }}
                             >
                               Associate
+                            </span>
+                          )}
+                          {s.exclude_from_payroll && (
+                            <span
+                              className="ml-2 text-xs px-2 py-0.5 rounded-full"
+                              style={{
+                                background: "rgba(212,175,55,0.1)",
+                                color: "#d4af37",
+                                border: "1px solid rgba(212,175,55,0.2)",
+                              }}
+                            >
+                              No Payroll
                             </span>
                           )}
                         </td>

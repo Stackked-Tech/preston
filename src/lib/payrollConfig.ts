@@ -130,7 +130,7 @@ export async function fetchBranchConfigs(): Promise<BranchConfig[]> {
   const allOverrides = overrideRes.data || [];
 
   return branches.map((b) => {
-    const branchStaff = allStaff.filter((s) => s.branch_id === b.branch_id);
+    const branchStaff = allStaff.filter((s) => s.branch_id === b.branch_id && !s.exclude_from_payroll);
     const branchOverrides = allOverrides.filter((o) => o.branch_id === b.branch_id);
 
     const staffConfig: Record<string, StaffMember> = {};

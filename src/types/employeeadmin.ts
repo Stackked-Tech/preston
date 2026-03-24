@@ -34,6 +34,7 @@ export interface EAStaff {
   onboarding_envelope_id: string | null;
   onboarding_signing_token: string | null;
   is_active: boolean;
+  exclude_from_payroll: boolean;
   sort_order: number;
   created_at: string;
 }
