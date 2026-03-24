@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useEnvelopeDetail, useAuditLog, useEnvelopes, useDocumentUpload } from "@/lib/signedToSealedHooks";
+import { useEnvelopeDetail, useAuditLog, useEnvelopes, useDocumentUpload, useRecipients, sanitizeEmail } from "@/lib/signedToSealedHooks";
 import type { STSRecipient, EnvelopeStatus } from "@/types/signedtosealed";
 import { STATUS_LABELS, FIELD_TYPE_LABELS } from "@/types/signedtosealed";
 import { generateSigningEmail } from "@/lib/signingEmailTemplate";
@@ -33,6 +33,7 @@ export default function EnvelopeDetail({ envelopeId, onBack, onEdit }: EnvelopeD
   const { detail, loading, refetch } = useEnvelopeDetail(envelopeId);
   const { logEvent } = useAuditLog(envelopeId);
   const { updateEnvelope, sendEnvelope, voidEnvelope } = useEnvelopes();
+  const { updateRecipient } = useRecipients(envelopeId);
   const { getPublicUrl } = useDocumentUpload();
   const [showAudit, setShowAudit] = useState(false);
   const [showDocument, setShowDocument] = useState(false);
@@ -44,6 +45,8 @@ export default function EnvelopeDetail({ envelopeId, onBack, onEdit }: EnvelopeD
   const [emailPreviewHtml, setEmailPreviewHtml] = useState<string | null>(null);
   const [emailPreviewRecipient, setEmailPreviewRecipient] = useState<string | null>(null);
   const [sendingEmailTo, setSendingEmailTo] = useState<string | null>(null);
+  const [editingEmailId, setEditingEmailId] = useState<string | null>(null);
+  const [editEmailValue, setEditEmailValue] = useState("");
 
   const handleSend = async () => {
     if (!detail) return;
@@ -122,6 +125,28 @@ export default function EnvelopeDetail({ envelopeId, onBack, onEdit }: EnvelopeD
     alert(`Signing link copied for ${r.name}`);
   };
 
+  const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+
+  const startEditEmail = (r: STSRecipient) => {
+    setEditingEmailId(r.id);
+    setEditEmailValue(r.email || "");
+  };
+
+  const saveEmail = async (r: STSRecipient) => {
+    const trimmed = sanitizeEmail(editEmailValue);
+    if (!trimmed || !isValidEmail(trimmed)) {
+      alert("Please enter a valid email address.");
+      return;
+    }
+    try {
+      await updateRecipient(r.id, { email: trimmed });
+      refetch();
+      setEditingEmailId(null);
+    } catch {
+      alert("Failed to update email");
+    }
+  };
+
   const previewEmail = (r: STSRecipient) => {
     if (!detail) return;
     const recipientFields = detail.fields.filter((f) => f.recipient_id === r.id);
@@ -146,6 +171,10 @@ export default function EnvelopeDetail({ envelopeId, onBack, onEdit }: EnvelopeD
 
   const sendEmail = async (r: STSRecipient) => {
     if (!detail) return;
+    if (!r.email || !isValidEmail(r.email)) {
+      alert(`No valid email address for ${r.name}. Click the email below their name to add or fix it.`);
+      return;
+    }
     const recipientFields = detail.fields.filter((f) => f.recipient_id === r.id);
     setSendingEmailTo(r.id);
     try {
@@ -381,7 +410,32 @@ export default function EnvelopeDetail({ envelopeId, onBack, onEdit }: EnvelopeD
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>{r.name}</p>
-                  <p className="text-[10px] font-mono truncate" style={{ color: "var(--text-muted)" }}>
+                  {editingEmailId === r.id ? (
+                    <div className="flex items-center gap-1 mt-0.5">
+                      <input
+                        type="email"
+                        value={editEmailValue}
+                        onChange={(e) => setEditEmailValue(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Enter") saveEmail(r); if (e.key === "Escape") setEditingEmailId(null); }}
+                        autoFocus
+                        className="text-xs px-2 py-0.5 rounded border outline-none"
+                        style={{ background: "var(--input-bg)", borderColor: "var(--gold)", color: "var(--text-primary)", width: "220px" }}
+                        placeholder="recipient@example.com"
+                      />
+                      <button onClick={() => saveEmail(r)} className="text-[10px] px-1.5 py-0.5 rounded" style={{ color: "#10b981" }}>Save</button>
+                      <button onClick={() => setEditingEmailId(null)} className="text-[10px] px-1.5 py-0.5 rounded" style={{ color: "var(--text-muted)" }}>Cancel</button>
+                    </div>
+                  ) : (
+                    <p
+                      className="text-[10px] truncate cursor-pointer hover:underline"
+                      style={{ color: r.email && isValidEmail(r.email) ? "var(--text-muted)" : "#ef4444" }}
+                      onClick={() => startEditEmail(r)}
+                      title="Click to edit email"
+                    >
+                      {r.email || "No email — click to add"}
+                    </p>
+                  )}
+                  <p className="text-[10px] font-mono truncate mt-0.5" style={{ color: "var(--text-muted)", opacity: 0.6 }}>
                     {getSigningLink(r)}
                   </p>
                 </div>
@@ -488,7 +542,31 @@ export default function EnvelopeDetail({ envelopeId, onBack, onEdit }: EnvelopeD
                       ({r.role}) · Order #{r.signing_order}
                     </span>
                   </p>
-                  <p className="text-xs truncate" style={{ color: "var(--text-muted)" }}>{r.email}</p>
+                  {editingEmailId === r.id ? (
+                    <div className="flex items-center gap-1 mt-0.5">
+                      <input
+                        type="email"
+                        value={editEmailValue}
+                        onChange={(e) => setEditEmailValue(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Enter") saveEmail(r); if (e.key === "Escape") setEditingEmailId(null); }}
+                        autoFocus
+                        className="text-xs px-2 py-0.5 rounded border outline-none"
+                        style={{ background: "var(--input-bg)", borderColor: "var(--gold)", color: "var(--text-primary)", width: "220px" }}
+                        placeholder="recipient@example.com"
+                      />
+                      <button onClick={() => saveEmail(r)} className="text-[10px] px-1.5 py-0.5 rounded" style={{ color: "#10b981" }}>Save</button>
+                      <button onClick={() => setEditingEmailId(null)} className="text-[10px] px-1.5 py-0.5 rounded" style={{ color: "var(--text-muted)" }}>Cancel</button>
+                    </div>
+                  ) : (
+                    <p
+                      className="text-xs truncate cursor-pointer hover:underline"
+                      style={{ color: r.email && isValidEmail(r.email) ? "var(--text-muted)" : "#ef4444" }}
+                      onClick={() => startEditEmail(r)}
+                      title="Click to edit email"
+                    >
+                      {r.email || "No email — click to add"}
+                    </p>
+                  )}
                 </div>
                 <div className="flex items-center gap-3 flex-shrink-0">
                   <span

@@ -15,6 +15,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
+    // Sanitize: strip all whitespace and lowercase before validating
+    const trimmedEmail = recipientEmail.trim().replace(/\s+/g, "").toLowerCase();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(trimmedEmail)) {
+      return NextResponse.json(
+        { error: `Invalid email address for ${recipientName}: "${recipientEmail}". Please fix the email and try again.` },
+        { status: 400 }
+      );
+    }
+
     const emailParams = {
       recipientName,
       senderName: senderName || "",
@@ -47,7 +57,7 @@ export async function POST(req: NextRequest) {
 
     const { data, error } = await resend.emails.send({
       from: fromAddress,
-      to: recipientEmail,
+      to: trimmedEmail,
       subject,
       html,
       text: plainText,

@@ -30,6 +30,12 @@ import type {
 } from "@/types/signedtosealed";
 import { RECIPIENT_COLORS } from "@/types/signedtosealed";
 
+// Sanitize email: trim whitespace, collapse internal spaces, lowercase
+export function sanitizeEmail(email: string | null | undefined): string {
+  if (!email) return "";
+  return email.trim().replace(/\s+/g, "").toLowerCase();
+}
+
 // Helper to convert Supabase error objects to proper Error instances
 function toError(err: unknown): Error {
   if (err instanceof Error) return err;
@@ -237,7 +243,7 @@ export function useRecipients(envelopeId: string | null) {
   const addRecipient = async (insert: STSRecipientInsert): Promise<STSRecipient> => {
     const { data, error } = await supabase
       .from("sts_recipients")
-      .insert(insert)
+      .insert({ ...insert, email: sanitizeEmail(insert.email) })
       .select()
       .single();
     if (error) throw toError(error);
@@ -247,9 +253,10 @@ export function useRecipients(envelopeId: string | null) {
   };
 
   const updateRecipient = async (id: string, updates: STSRecipientUpdate): Promise<void> => {
+    const sanitized = updates.email !== undefined ? { ...updates, email: sanitizeEmail(updates.email) } : updates;
     const { error } = await supabase
       .from("sts_recipients")
-      .update({ ...updates, updated_at: new Date().toISOString() })
+      .update({ ...sanitized, updated_at: new Date().toISOString() })
       .eq("id", id);
     if (error) throw toError(error);
     setRecipients((prev) =>
@@ -689,7 +696,7 @@ export async function createEnvelopeFromTemplate(
       .insert({
         envelope_id: env.id,
         name: mapping.name,
-        email: mapping.email,
+        email: sanitizeEmail(mapping.email),
         role: mapping.role,
         signing_order: mapping.signing_order,
         status: "pending",
