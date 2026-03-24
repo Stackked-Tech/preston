@@ -128,62 +128,132 @@ export async function POST(request: NextRequest) {
       results.warnings.push(...colorResult.warnings);
     }
 
-    // 4c. Overlay tips from Supabase cache (populated by GitHub Action) or live Looker
-    let tipsSource: "looker" | "supabase-cache" | "csv-gc-fallback" = "csv-gc-fallback";
+    // 4c. Overlay tips from Supabase cache (populated by GitHub Action)
+    // If no cache exists, trigger GitHub Action and poll until tips arrive.
+    let tipsSource: "looker" | "supabase-cache" | "csv-gc-fallback" =
+      "csv-gc-fallback";
     const resolveName = createStaffNameResolver(
       Object.keys(branch.staffConfig)
     );
 
-    // Try Supabase cache first (written by GitHub Action)
-    const { data: cachedTips } = await supabase
-      .from("ps_looker_tips")
-      .select("staff_name, paid_to_salon")
-      .eq("branch_id", branchId)
-      .eq("start_date", startDate)
-      .eq("end_date", endDate);
+    // Helper: read cached tips from Supabase
+    async function readCachedTips() {
+      const { data } = await supabase
+        .from("ps_looker_tips")
+        .select("staff_name, paid_to_salon")
+        .eq("branch_id", branchId)
+        .eq("start_date", startDate)
+        .eq("end_date", endDate);
+      return data && data.length > 0 ? data : null;
+    }
 
-    if (cachedTips && cachedTips.length > 0) {
+    // Helper: apply tip rows to staffData
+    function applyTips(
+      tipRows: { staff_name: string; paid_to_salon: number }[]
+    ) {
       for (const name of Object.keys(results.staffData)) {
         results.staffData[name].tips = 0;
       }
-      for (const row of cachedTips) {
+      for (const row of tipRows) {
         const resolved = resolveName(row.staff_name) || row.staff_name;
         if (results.staffData[resolved]) {
           results.staffData[resolved].tips =
             Math.round(row.paid_to_salon * 100) / 100;
         }
       }
+    }
+
+    // Check cache first
+    let cachedTips = await readCachedTips();
+
+    if (cachedTips) {
+      applyTips(cachedTips);
       tipsSource = "supabase-cache";
     } else {
-      // Fall back to live Looker (works locally, usually fails on Vercel)
-      try {
-        const lookerTips = await fetchStaffTips({
-          branchId,
-          branchName: branch.name,
-          startDate,
-          endDate,
-        });
+      // No cache — trigger GitHub Action and poll for results
+      const ghToken = process.env.GITHUB_PAT;
+      if (ghToken) {
+        try {
+          const dispatchRes = await fetch(
+            "https://api.github.com/repos/Stackked-Tech/preston/actions/workflows/fetch-looker-tips.yml/dispatches",
+            {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${ghToken}`,
+                Accept: "application/vnd.github.v3+json",
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                ref: "main",
+                inputs: { branchId, startDate, endDate },
+              }),
+            }
+          );
 
-        for (const name of Object.keys(results.staffData)) {
-          results.staffData[name].tips = 0;
-        }
-        for (const [lookerName, paidToSalon] of lookerTips) {
-          const resolved = resolveName(lookerName) || lookerName;
-          if (results.staffData[resolved]) {
-            results.staffData[resolved].tips =
-              Math.round(paidToSalon * 100) / 100;
+          if (dispatchRes.ok) {
+            // Poll Supabase for up to 90 seconds waiting for tips
+            const pollStart = Date.now();
+            const maxPollMs = 90_000;
+            let pollDelay = 3_000;
+
+            while (Date.now() - pollStart < maxPollMs) {
+              await new Promise((r) => setTimeout(r, pollDelay));
+              pollDelay = Math.min(pollDelay + 1_000, 8_000);
+
+              cachedTips = await readCachedTips();
+              if (cachedTips) {
+                applyTips(cachedTips);
+                tipsSource = "supabase-cache";
+                break;
+              }
+            }
+
+            if (!cachedTips) {
+              results.warnings.push(
+                "Tips fetch timed out — enter tips manually or re-run payroll later."
+              );
+            }
+          } else {
+            results.warnings.push(
+              `Tips fetch trigger failed (HTTP ${dispatchRes.status}) — enter tips manually.`
+            );
           }
-        }
-        tipsSource = "looker";
-        if (lookerTips.size === 0) {
+        } catch (err) {
           results.warnings.push(
-            'No tips found. Click "Fetch Tips" to load from Phorest, or enter manually.'
+            `Tips fetch error: ${err instanceof Error ? err.message : "Unknown"} — enter tips manually.`
           );
         }
-      } catch (err) {
-        results.warnings.push(
-          `Tips unavailable — click "Fetch Tips" to load from Phorest, or enter manually. (${err instanceof Error ? err.message : "Unknown"})`
-        );
+      } else {
+        // No GITHUB_PAT — try live Looker as fallback (works locally)
+        try {
+          const lookerTips = await fetchStaffTips({
+            branchId,
+            branchName: branch.name,
+            startDate,
+            endDate,
+          });
+
+          for (const name of Object.keys(results.staffData)) {
+            results.staffData[name].tips = 0;
+          }
+          for (const [lookerName, paidToSalon] of lookerTips) {
+            const resolved = resolveName(lookerName) || lookerName;
+            if (results.staffData[resolved]) {
+              results.staffData[resolved].tips =
+                Math.round(paidToSalon * 100) / 100;
+            }
+          }
+          tipsSource = "looker";
+          if (lookerTips.size === 0) {
+            results.warnings.push(
+              "No tips found — enter manually."
+            );
+          }
+        } catch (err) {
+          results.warnings.push(
+            `Tips unavailable — enter manually. (${err instanceof Error ? err.message : "Unknown"})`
+          );
+        }
       }
     }
 
