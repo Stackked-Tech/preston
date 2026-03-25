@@ -197,28 +197,15 @@ export async function POST(request: NextRequest) {
       applyTips(cachedTips);
       tipsSource = "supabase-cache";
     } else if (tipsActionTriggered) {
-      // GitHub Action was triggered before CSV work — it's had ~15s head start.
-      // Do a short poll (up to 25s) to catch it if it finishes in time.
+      // GitHub Action was triggered before CSV work — check if it finished
+      // during the ~15s of CSV processing (free check, no polling).
       cachedTips = await readCachedTips();
-      if (!cachedTips) {
-        const pollStart = Date.now();
-        const maxPollMs = 25_000;
-        let pollDelay = 3_000;
-        while (Date.now() - pollStart < maxPollMs) {
-          await new Promise((r) => setTimeout(r, pollDelay));
-          pollDelay = Math.min(pollDelay + 1_000, 5_000);
-          cachedTips = await readCachedTips();
-          if (cachedTips) break;
-        }
-      }
       if (cachedTips) {
         applyTips(cachedTips);
         tipsSource = "supabase-cache";
-      } else {
-        results.warnings.push(
-          "Tips are still being fetched — re-run payroll in ~30s to include tips, or enter them manually."
-        );
       }
+      // If still no cache, the client auto-polls via /api/phorest/tips-status
+      // and fills tips in when they arrive — no re-run needed.
     } else if (!ghToken) {
       // No GITHUB_PAT — try live Looker as fallback (works locally)
       try {

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
 import { useTheme } from "@/lib/theme";
 import Image from "next/image";
 import Link from "next/link";
@@ -246,6 +246,95 @@ export default function PayoutSuite() {
 
     await Promise.allSettled(promises);
   }, [startDate, endDate, colorChargesCsvs, selectedBranches, BRANCHES]);
+
+  // ── Auto-poll for tips when branches are missing them ──
+  const tipsPollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    // Find branches that finished but don't have tips yet
+    const needsTips = Object.entries(results).filter(
+      ([, r]) => r.status === "done" && r.data?.tipsSource === "csv-gc-fallback"
+    );
+
+    if (needsTips.length === 0 || !startDate || !endDate) {
+      // No branches need tips — clear any existing poll
+      if (tipsPollingRef.current) {
+        clearInterval(tipsPollingRef.current);
+        tipsPollingRef.current = null;
+      }
+      return;
+    }
+
+    // Already polling
+    if (tipsPollingRef.current) return;
+
+    let attempts = 0;
+    const maxAttempts = 20; // ~100s at 5s intervals
+
+    tipsPollingRef.current = setInterval(async () => {
+      attempts++;
+      if (attempts > maxAttempts) {
+        if (tipsPollingRef.current) {
+          clearInterval(tipsPollingRef.current);
+          tipsPollingRef.current = null;
+        }
+        return;
+      }
+
+      for (const [branchId, result] of needsTips) {
+        if (result.status !== "done" || result.data?.tipsSource !== "csv-gc-fallback") continue;
+
+        try {
+          const res = await fetch(
+            `/api/phorest/tips-status?branchId=${branchId}&startDate=${startDate}&endDate=${endDate}`
+          );
+          const json = await res.json();
+
+          if (json.ready && json.tips) {
+            // Update staffData with tips in-place
+            setResults((prev) => {
+              const branchResult = prev[branchId];
+              if (branchResult?.status !== "done" || !branchResult.data) return prev;
+
+              const updatedStaffData = { ...branchResult.data.staffData };
+              for (const [name, tip] of Object.entries(json.tips as Record<string, number>)) {
+                if (updatedStaffData[name]) {
+                  updatedStaffData[name] = { ...updatedStaffData[name], tips: tip };
+                }
+              }
+
+              // Remove the tips warning
+              const updatedWarnings = branchResult.data.warnings.filter(
+                (w) => !w.includes("Tips are still being fetched") && !w.includes("re-run payroll")
+              );
+
+              return {
+                ...prev,
+                [branchId]: {
+                  ...branchResult,
+                  data: {
+                    ...branchResult.data,
+                    staffData: updatedStaffData,
+                    tipsSource: "supabase-cache" as const,
+                    warnings: updatedWarnings,
+                  },
+                },
+              };
+            });
+          }
+        } catch {
+          // Non-fatal — will retry next interval
+        }
+      }
+    }, 5_000);
+
+    return () => {
+      if (tipsPollingRef.current) {
+        clearInterval(tipsPollingRef.current);
+        tipsPollingRef.current = null;
+      }
+    };
+  }, [results, startDate, endDate]);
 
   // ── Fetch Tips (trigger GitHub Action → Supabase) ──
   const fetchTips = useCallback(async () => {
