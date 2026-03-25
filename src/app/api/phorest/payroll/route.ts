@@ -171,7 +171,7 @@ export async function POST(request: NextRequest) {
       applyTips(cachedTips);
       tipsSource = "supabase-cache";
     } else {
-      // No cache — trigger GitHub Action and poll for results
+      // No cache — trigger GitHub Action in the background (don't block payroll)
       const ghToken = process.env.GITHUB_PAT;
       if (ghToken) {
         try {
@@ -192,28 +192,9 @@ export async function POST(request: NextRequest) {
           );
 
           if (dispatchRes.ok) {
-            // Poll Supabase for up to 90 seconds waiting for tips
-            const pollStart = Date.now();
-            const maxPollMs = 90_000;
-            let pollDelay = 3_000;
-
-            while (Date.now() - pollStart < maxPollMs) {
-              await new Promise((r) => setTimeout(r, pollDelay));
-              pollDelay = Math.min(pollDelay + 1_000, 8_000);
-
-              cachedTips = await readCachedTips();
-              if (cachedTips) {
-                applyTips(cachedTips);
-                tipsSource = "supabase-cache";
-                break;
-              }
-            }
-
-            if (!cachedTips) {
-              results.warnings.push(
-                "Tips fetch timed out — enter tips manually or re-run payroll later."
-              );
-            }
+            results.warnings.push(
+              "Tips are being fetched in the background — re-run payroll in ~60s to include tips, or enter them manually."
+            );
           } else {
             results.warnings.push(
               `Tips fetch trigger failed (HTTP ${dispatchRes.status}) — enter tips manually.`
