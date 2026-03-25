@@ -175,7 +175,7 @@ try {
       context: { id: LOOKER_DASHBOARD_ID, type: "dashboard" },
       options: { force_run: true, streaming: true, eager_poll: false },
     }),
-    signal: AbortSignal.timeout(60_000),
+    signal: AbortSignal.timeout(90_000),
   });
   if (!queryRes.ok) throw new Error(`Query submit failed: ${queryRes.status}`);
   const queryText = await queryRes.text();
@@ -186,7 +186,7 @@ try {
   // Step 5: Poll for results
   console.log("  Step 5: Polling for results...");
   const tips = new Map();
-  const maxWaitMs = 120_000;
+  const maxWaitMs = 300_000;
   const start = Date.now();
   let delay = 1000;
 
@@ -198,7 +198,7 @@ try {
       `${LOOKER_BASE}/api/internal/querymanager/queries?ids%5B%5D=${queryId}&streaming=true`,
       {
         headers: { Cookie: cookieStr, "x-csrf-token": csrfToken },
-        signal: AbortSignal.timeout(20_000),
+        signal: AbortSignal.timeout(30_000),
       }
     );
     if (!pollRes.ok) continue;
@@ -258,7 +258,7 @@ try {
     }
   }
 
-  throw new Error(`Query timed out after ${maxWaitMs / 1000}s`);
+  throw new Error(`Looker query timed out after ${maxWaitMs / 1000}s — Looker may be slow or the query may need a different date range`);
 } catch (err) {
   console.error(`Error: ${err.message}`);
   process.exit(1);
