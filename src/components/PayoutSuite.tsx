@@ -913,6 +913,47 @@ function BranchResults({
   const [subsidiaryOverride, setSubsidiaryOverride] = useState<number | null>(null);
   const effectiveSubsidiaryId = subsidiaryOverride ?? data.subsidiaryId;
 
+  // Quick-add staff who didn't appear in the payroll run
+  const [addedStaff, setAddedStaff] = useState<string[]>([]);
+  const [showAddMenu, setShowAddMenu] = useState(false);
+  const [customName, setCustomName] = useState("");
+
+  // Staff in config but not in results (candidates for quick-add)
+  const missingStaff = Object.keys(staffConfig).filter(
+    (name) => !staffOrder.includes(name) && !addedStaff.includes(name)
+  );
+
+  // Effective staff order = original + added
+  const effectiveStaffOrder = [...staffOrder, ...addedStaff];
+
+  // Build effective staffData with zero entries for added staff
+  const effectiveStaffData: Record<string, typeof staffData[string]> = { ...staffData };
+  for (const name of addedStaff) {
+    if (!effectiveStaffData[name]) {
+      effectiveStaffData[name] = {
+        productWk1: 0, productWk2: 0, contractorService: 0,
+        associatePay: 0, tips: 0, newGuests: 0,
+        employeePurchases: 0, creditCardAmount: 0, colorCharges: 0,
+      };
+    }
+  }
+
+  const addStaffMember = useCallback((name: string) => {
+    if (!name.trim() || staffOrder.includes(name) || addedStaff.includes(name)) return;
+    setAddedStaff((prev) => [...prev, name.trim()]);
+    setShowAddMenu(false);
+    setCustomName("");
+  }, [staffOrder, addedStaff]);
+
+  const removeAddedStaff = useCallback((name: string) => {
+    setAddedStaff((prev) => prev.filter((n) => n !== name));
+    setOverrides((prev) => {
+      const next = { ...prev };
+      delete next[name];
+      return next;
+    });
+  }, []);
+
   const setOverride = useCallback((staffName: string, field: keyof PayrollOverrides, value: number) => {
     setOverrides((prev) => ({
       ...prev,
@@ -923,7 +964,7 @@ function BranchResults({
   // Compute associate fees using OVERRIDDEN associatePay values
   const associateFees: Record<string, number> = {};
   for (const [name, cfg] of Object.entries(staffConfig)) {
-    const raw = staffData[name]?.associatePay || 0;
+    const raw = effectiveStaffData[name]?.associatePay || 0;
     const o = overrides[name] || {};
     const assocPayData = o.associatePay ?? raw;
     if (cfg.supervisor && assocPayData && staffConfig[cfg.supervisor]) {
@@ -931,9 +972,16 @@ function BranchResults({
     }
   }
 
-  const rows = staffOrder.map((name) => {
-    const raw = staffData[name] || { productWk1: 0, productWk2: 0, contractorService: 0, associatePay: 0, tips: 0, newGuests: 0, employeePurchases: 0, creditCardAmount: 0, colorCharges: 0 };
-    const cfg = staffConfig[name];
+  const defaultCfg: StaffMember = { targetFirst: "", targetLast: "", internalId: 0, stationLease: 0, financialServices: 0, phorestFee: 0, refreshment: 0 };
+
+  const rows = effectiveStaffOrder.map((name) => {
+    const raw = effectiveStaffData[name] || { productWk1: 0, productWk2: 0, contractorService: 0, associatePay: 0, tips: 0, newGuests: 0, employeePurchases: 0, creditCardAmount: 0, colorCharges: 0 };
+    const isAdded = addedStaff.includes(name);
+    const cfg = staffConfig[name] || {
+      ...defaultCfg,
+      targetFirst: name.split(" ").slice(0, -1).join(" ") || name,
+      targetLast: name.split(" ").slice(-1)[0] || "",
+    };
     const o = overrides[name] || {};
 
     const productWk1 = o.productWk1 ?? raw.productWk1;
@@ -962,7 +1010,7 @@ function BranchResults({
     const totalCheck = totalEarned + (stationLease + financialServices + colorCharges + ccCharges + findersFee + empPurch + phorestFee + refreshment + assocFee + miscFees);
 
     return {
-      name, cfg, productWk1, productWk2, tips, contractorService, associatePay,
+      name, cfg, isAdded, productWk1, productWk2, tips, contractorService, associatePay,
       newGuests, employeePurchases, colorCharges, creditCardAmount,
       stationLease, financialServices, phorestFee, refreshment, miscFees,
       rebateWk1, rebateWk2, rebateTotal, totalEarned, ccCharges, findersFee,
@@ -971,7 +1019,7 @@ function BranchResults({
   });
 
   const handleDownload = useCallback(async () => {
-    if (Object.keys(overrides).length === 0 && subsidiaryOverride === null) {
+    if (Object.keys(overrides).length === 0 && subsidiaryOverride === null && addedStaff.length === 0) {
       onDownload();
       return;
     }
@@ -1016,7 +1064,7 @@ function BranchResults({
     a.download = `${data.abbreviation}_payroll_edited.xlsx`;
     a.click();
     URL.revokeObjectURL(url);
-  }, [overrides, rows, data, onDownload]);
+  }, [overrides, rows, data, onDownload, addedStaff]);
 
   const totalPayroll = rows.reduce((sum, r) => sum + r.totalCheck, 0);
 
@@ -1061,9 +1109,9 @@ function BranchResults({
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {(Object.keys(overrides).length > 0 || subsidiaryOverride !== null) && (
+          {(Object.keys(overrides).length > 0 || subsidiaryOverride !== null || addedStaff.length > 0) && (
             <button
-              onClick={() => { setOverrides({}); setSubsidiaryOverride(null); }}
+              onClick={() => { setOverrides({}); setSubsidiaryOverride(null); setAddedStaff([]); }}
               className="px-3 py-2 rounded-md text-xs font-sans font-medium tracking-wide transition-all border"
               style={{ borderColor: "var(--border-light)", color: "var(--text-secondary)" }}
             >
@@ -1075,7 +1123,7 @@ function BranchResults({
             className="px-4 py-2 rounded-md text-xs font-sans font-medium tracking-wide transition-all"
             style={{ background: "var(--gold)", color: "#0a0b0e" }}
           >
-            {Object.keys(overrides).length > 0 ? "Download Edited XLSX" : "Download XLSX"}
+            {(Object.keys(overrides).length > 0 || addedStaff.length > 0) ? "Download Edited XLSX" : "Download XLSX"}
           </button>
         </div>
       </div>
@@ -1119,6 +1167,81 @@ function BranchResults({
           <span style={{ color: tipsMessage.startsWith("Error") ? "#ef4444" : "#22c55e" }}>
             {tipsMessage}
           </span>
+        )}
+      </div>
+
+      {/* Quick-add staff */}
+      <div className="mb-4 relative inline-block">
+        <button
+          onClick={() => setShowAddMenu((v) => !v)}
+          className="px-3 py-1.5 rounded text-xs font-sans font-medium transition-all border flex items-center gap-1.5"
+          style={{
+            border: "1px solid var(--border-color)",
+            background: "var(--bg-secondary)",
+            color: "var(--text-primary)",
+          }}
+        >
+          <span style={{ fontSize: 14, lineHeight: 1 }}>+</span> Add Staff
+        </button>
+        {showAddMenu && (
+          <div
+            className="absolute top-full left-0 mt-1 rounded-lg border shadow-lg z-50 py-1 max-h-64 overflow-y-auto"
+            style={{
+              background: "var(--card-bg)",
+              borderColor: "var(--border-light)",
+              minWidth: 240,
+            }}
+          >
+            {missingStaff.length > 0 && (
+              <>
+                <div className="px-3 py-1.5 text-[10px] font-sans uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+                  Configured Staff
+                </div>
+                {missingStaff.map((name) => (
+                  <button
+                    key={name}
+                    onClick={() => addStaffMember(name)}
+                    className="block w-full text-left px-3 py-1.5 text-xs font-sans hover:bg-white/5 transition-colors"
+                    style={{ color: "var(--text-primary)" }}
+                  >
+                    {name}
+                    {staffConfig[name]?.associatePay != null && (
+                      <span className="ml-2 text-[10px]" style={{ color: "var(--text-muted)" }}>associate</span>
+                    )}
+                  </button>
+                ))}
+                <div className="mx-2 my-1 border-t" style={{ borderColor: "var(--border-light)" }} />
+              </>
+            )}
+            <div className="px-3 py-1.5 text-[10px] font-sans uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+              Custom Name
+            </div>
+            <form
+              className="flex gap-1 px-2 pb-2"
+              onSubmit={(e) => { e.preventDefault(); addStaffMember(customName); }}
+            >
+              <input
+                value={customName}
+                onChange={(e) => setCustomName(e.target.value)}
+                placeholder="First Last"
+                className="flex-1 px-2 py-1 rounded text-xs border outline-none"
+                style={{
+                  background: "var(--bg-primary)",
+                  borderColor: "var(--border-light)",
+                  color: "var(--text-primary)",
+                }}
+                autoFocus
+              />
+              <button
+                type="submit"
+                disabled={!customName.trim()}
+                className="px-2 py-1 rounded text-xs font-medium disabled:opacity-30"
+                style={{ background: "var(--gold)", color: "#0a0b0e" }}
+              >
+                Add
+              </button>
+            </form>
+          </div>
         )}
       </div>
 
@@ -1254,7 +1377,21 @@ function BranchResults({
                   {/* B: Internal ID */}
                   <td className={dc} style={{ color: "var(--text-muted)" }}>{r.cfg.internalId || ""}</td>
                   {/* C: First Names */}
-                  <td className={dc} style={{ color: "var(--text-primary)" }}>{r.cfg.targetFirst}</td>
+                  <td className={dc} style={{ color: "var(--text-primary)" }}>
+                    <span className="flex items-center gap-1">
+                      {r.isAdded && (
+                        <button
+                          onClick={() => removeAddedStaff(r.name)}
+                          className="text-[10px] rounded-full w-4 h-4 flex items-center justify-center shrink-0 hover:opacity-80"
+                          style={{ background: "rgba(239,68,68,0.15)", color: "#ef4444" }}
+                          title="Remove added staff"
+                        >
+                          ×
+                        </button>
+                      )}
+                      {r.cfg.targetFirst}
+                    </span>
+                  </td>
                   {/* D: Last Name */}
                   <td className={dc} style={{ color: "var(--text-primary)" }}>{r.cfg.targetLast}</td>
                   {/* E: Product Sales (wk 1) — editable */}
