@@ -83,6 +83,46 @@ export async function POST(request: NextRequest) {
       branch.account
     );
 
+    // Helper: read cached tips from Supabase
+    async function readCachedTips() {
+      const { data } = await supabase
+        .from("ps_looker_tips")
+        .select("staff_name, paid_to_salon")
+        .eq("branch_id", branchId)
+        .eq("start_date", startDate)
+        .eq("end_date", endDate);
+      return data && data.length > 0 ? data : null;
+    }
+
+    // ── Tips: check cache early + trigger GitHub Action if needed ──
+    // Trigger the Action BEFORE Phorest CSV work so it runs in parallel.
+    let cachedTips = await readCachedTips();
+    let tipsActionTriggered = false;
+    const ghToken = process.env.GITHUB_PAT;
+
+    if (!cachedTips && ghToken) {
+      try {
+        const dispatchRes = await fetch(
+          "https://api.github.com/repos/Stackked-Tech/preston/actions/workflows/fetch-looker-tips.yml/dispatches",
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${ghToken}`,
+              Accept: "application/vnd.github.v3+json",
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              ref: "main",
+              inputs: { branchId, startDate, endDate },
+            }),
+          }
+        );
+        tipsActionTriggered = dispatchRes.ok;
+      } catch {
+        // Non-fatal — tips can be entered manually
+      }
+    }
+
     // 1. Create CSV export job
     const job = await createCsvExportJob(branchId, startDate, endDate);
 
@@ -129,23 +169,11 @@ export async function POST(request: NextRequest) {
     }
 
     // 4c. Overlay tips from Supabase cache (populated by GitHub Action)
-    // If no cache exists, trigger GitHub Action and poll until tips arrive.
     let tipsSource: "looker" | "supabase-cache" | "csv-gc-fallback" =
       "csv-gc-fallback";
     const resolveName = createStaffNameResolver(
       Object.keys(branch.staffConfig)
     );
-
-    // Helper: read cached tips from Supabase
-    async function readCachedTips() {
-      const { data } = await supabase
-        .from("ps_looker_tips")
-        .select("staff_name, paid_to_salon")
-        .eq("branch_id", branchId)
-        .eq("start_date", startDate)
-        .eq("end_date", endDate);
-      return data && data.length > 0 ? data : null;
-    }
 
     // Helper: apply tip rows to staffData
     function applyTips(
@@ -164,79 +192,68 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Check cache first
-    let cachedTips = await readCachedTips();
-
     if (cachedTips) {
+      // Tips were cached before CSV processing started
       applyTips(cachedTips);
       tipsSource = "supabase-cache";
-    } else {
-      // No cache — trigger GitHub Action in the background (don't block payroll)
-      const ghToken = process.env.GITHUB_PAT;
-      if (ghToken) {
-        try {
-          const dispatchRes = await fetch(
-            "https://api.github.com/repos/Stackked-Tech/preston/actions/workflows/fetch-looker-tips.yml/dispatches",
-            {
-              method: "POST",
-              headers: {
-                Authorization: `Bearer ${ghToken}`,
-                Accept: "application/vnd.github.v3+json",
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
-                ref: "main",
-                inputs: { branchId, startDate, endDate },
-              }),
-            }
-          );
-
-          if (dispatchRes.ok) {
-            results.warnings.push(
-              "Tips are being fetched in the background — re-run payroll in ~60s to include tips, or enter them manually."
-            );
-          } else {
-            results.warnings.push(
-              `Tips fetch trigger failed (HTTP ${dispatchRes.status}) — enter tips manually.`
-            );
-          }
-        } catch (err) {
-          results.warnings.push(
-            `Tips fetch error: ${err instanceof Error ? err.message : "Unknown"} — enter tips manually.`
-          );
-        }
-      } else {
-        // No GITHUB_PAT — try live Looker as fallback (works locally)
-        try {
-          const lookerTips = await fetchStaffTips({
-            branchId,
-            branchName: branch.name,
-            startDate,
-            endDate,
-          });
-
-          for (const name of Object.keys(results.staffData)) {
-            results.staffData[name].tips = 0;
-          }
-          for (const [lookerName, paidToSalon] of lookerTips) {
-            const resolved = resolveName(lookerName) || lookerName;
-            if (results.staffData[resolved]) {
-              results.staffData[resolved].tips =
-                Math.round(paidToSalon * 100) / 100;
-            }
-          }
-          tipsSource = "looker";
-          if (lookerTips.size === 0) {
-            results.warnings.push(
-              "No tips found — enter manually."
-            );
-          }
-        } catch (err) {
-          results.warnings.push(
-            `Tips unavailable — enter manually. (${err instanceof Error ? err.message : "Unknown"})`
-          );
+    } else if (tipsActionTriggered) {
+      // GitHub Action was triggered before CSV work — it's had ~15s head start.
+      // Do a short poll (up to 25s) to catch it if it finishes in time.
+      cachedTips = await readCachedTips();
+      if (!cachedTips) {
+        const pollStart = Date.now();
+        const maxPollMs = 25_000;
+        let pollDelay = 3_000;
+        while (Date.now() - pollStart < maxPollMs) {
+          await new Promise((r) => setTimeout(r, pollDelay));
+          pollDelay = Math.min(pollDelay + 1_000, 5_000);
+          cachedTips = await readCachedTips();
+          if (cachedTips) break;
         }
       }
+      if (cachedTips) {
+        applyTips(cachedTips);
+        tipsSource = "supabase-cache";
+      } else {
+        results.warnings.push(
+          "Tips are still being fetched — re-run payroll in ~30s to include tips, or enter them manually."
+        );
+      }
+    } else if (!ghToken) {
+      // No GITHUB_PAT — try live Looker as fallback (works locally)
+      try {
+        const lookerTips = await fetchStaffTips({
+          branchId,
+          branchName: branch.name,
+          startDate,
+          endDate,
+        });
+
+        for (const name of Object.keys(results.staffData)) {
+          results.staffData[name].tips = 0;
+        }
+        for (const [lookerName, paidToSalon] of lookerTips) {
+          const resolved = resolveName(lookerName) || lookerName;
+          if (results.staffData[resolved]) {
+            results.staffData[resolved].tips =
+              Math.round(paidToSalon * 100) / 100;
+          }
+        }
+        tipsSource = "looker";
+        if (lookerTips.size === 0) {
+          results.warnings.push(
+            "No tips found — enter manually."
+          );
+        }
+      } catch (err) {
+        results.warnings.push(
+          `Tips unavailable — enter manually. (${err instanceof Error ? err.message : "Unknown"})`
+        );
+      }
+    } else {
+      results.warnings.push(
+        "Tips fetch failed — enter tips manually."
+      );
     }
 
     // 5. Generate Excel
