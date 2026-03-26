@@ -61,6 +61,13 @@ const microApps = [
     icon: "🏠",
     color: "#d4af37",
   },
+  {
+    name: "Construction Scheduler",
+    description: "Project scheduling & sub notifications",
+    href: "/scheduler",
+    icon: "📅",
+    color: "#f97316",
+  },
 ];
 
 export default function Home() {
