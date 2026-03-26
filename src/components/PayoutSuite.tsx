@@ -55,6 +55,7 @@ interface PayrollOverrides {
   financialServices?: number;
   phorestFee?: number;
   refreshment?: number;
+  associateFee?: number;
   miscFees?: number;
 }
 
@@ -817,7 +818,8 @@ function parseRunFilename(fileName: string): ParsedRun | null {
 // EDITABLE CELL
 // ═══════════════════════════════════════════════════════════════════════════════
 
-/** Inline-editable number cell. Shows formatted value; click to edit. */
+/** Inline-editable number cell. Shows formatted value; click to edit.
+ *  Tab/Shift+Tab moves to the next/prev editable cell in the row. */
 function EditableCell({
   value,
   originalValue,
@@ -833,11 +835,31 @@ function EditableCell({
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
+  const tdRef = useRef<HTMLTableCellElement>(null);
   const isOverridden = value !== originalValue;
+
+  const commitAndMove = useCallback((direction: 1 | -1) => {
+    const parsed = parseFloat(draft);
+    if (!isNaN(parsed)) onChange(parsed);
+    setEditing(false);
+
+    // Find next/prev editable cell in the same row
+    const td = tdRef.current;
+    if (!td) return;
+    const row = td.parentElement as HTMLTableRowElement | null;
+    if (!row) return;
+    const cells = Array.from(row.querySelectorAll<HTMLTableCellElement>("td[data-editable]"));
+    const idx = cells.indexOf(td);
+    const next = cells[idx + direction];
+    if (next) {
+      // Small delay to let state settle, then click the next cell
+      setTimeout(() => next.click(), 0);
+    }
+  }, [draft, onChange]);
 
   if (editing) {
     return (
-      <td className="px-2 py-1" style={style}>
+      <td ref={tdRef} data-editable className="px-2 py-1" style={style}>
         <input
           autoFocus
           type="number"
@@ -856,6 +878,10 @@ function EditableCell({
               setEditing(false);
             }
             if (e.key === "Escape") setEditing(false);
+            if (e.key === "Tab") {
+              e.preventDefault();
+              commitAndMove(e.shiftKey ? -1 : 1);
+            }
           }}
           className="w-full text-right text-[13px] font-sans px-2 py-1 rounded border outline-none"
           style={{
@@ -870,6 +896,8 @@ function EditableCell({
 
   return (
     <td
+      ref={tdRef}
+      data-editable
       className="px-3 py-2.5 whitespace-nowrap text-right cursor-pointer hover:opacity-80"
       style={{
         color: color || "var(--text-secondary)",
@@ -1006,7 +1034,7 @@ function BranchResults({
     const ccCharges = 0.03 * -creditCardAmount;
     const findersFee = 0.2 * -(newGuests || 0);
     const empPurch = employeePurchases ? -employeePurchases : 0;
-    const assocFee = associateFees[name] || 0;
+    const assocFee = o.associateFee ?? (associateFees[name] || 0);
     const totalCheck = totalEarned + (stationLease + financialServices + colorCharges + ccCharges + findersFee + empPurch + phorestFee + refreshment + assocFee + miscFees);
 
     return {
@@ -1072,6 +1100,13 @@ function BranchResults({
   const hc = "px-3 py-2 font-semibold whitespace-nowrap";
   const dc = "px-3 py-2.5 whitespace-nowrap";
   const manualBg = "rgba(251, 191, 36, 0.06)";
+
+  // Sticky column positions (freeze panes: Sub ID, Internal ID, First Names, Last Name)
+  const stickyBase: React.CSSProperties = { position: "sticky", zIndex: 2 };
+  const sticky0: React.CSSProperties = { ...stickyBase, left: 0, minWidth: 55 };
+  const sticky1: React.CSSProperties = { ...stickyBase, left: 55, minWidth: 80 };
+  const sticky2: React.CSSProperties = { ...stickyBase, left: 135, minWidth: 130 };
+  const sticky3: React.CSSProperties = { ...stickyBase, left: 265, minWidth: 110, borderRight: "2px solid var(--border-color)" };
 
   return (
     <div>
@@ -1247,21 +1282,28 @@ function BranchResults({
       </div>
 
       {/* Spreadsheet-style table — matches XLSX columns A through AF */}
+      <style>{`
+        .payroll-table-wrap::-webkit-scrollbar { height: 14px; }
+        .payroll-table-wrap::-webkit-scrollbar-track { background: var(--bg-secondary); border-radius: 7px; }
+        .payroll-table-wrap::-webkit-scrollbar-thumb { background: var(--gold); border-radius: 7px; min-width: 60px; }
+        .payroll-table-wrap::-webkit-scrollbar-thumb:hover { background: var(--gold-light); }
+        .payroll-table-wrap { scrollbar-width: auto; scrollbar-color: var(--gold) var(--bg-secondary); }
+      `}</style>
       <div
-        className="rounded-lg border overflow-x-auto"
-        style={{ borderColor: "var(--border-light)" }}
+        className="payroll-table-wrap rounded-lg border overflow-x-auto overflow-y-auto"
+        style={{ borderColor: "var(--border-light)", maxHeight: "calc(100vh - 120px)" }}
       >
         <table
           className="text-[13px] font-sans border-collapse"
           style={{ minWidth: 2800 }}
         >
           {/* ── Header Row 1 ── */}
-          <thead>
+          <thead style={{ position: "sticky", top: 0, zIndex: 4 }}>
             <tr style={{ background: "var(--bg-tertiary)", color: "var(--text-secondary)" }}>
-              <th className={hc}></th>{/* A */}
-              <th className={hc}></th>{/* B */}
-              <th className={hc}></th>{/* C */}
-              <th className={hc}></th>{/* D */}
+              <th className={hc} style={{ ...sticky0, background: "var(--bg-tertiary)", zIndex: 3 }}></th>{/* A */}
+              <th className={hc} style={{ ...sticky1, background: "var(--bg-tertiary)", zIndex: 3 }}></th>{/* B */}
+              <th className={hc} style={{ ...sticky2, background: "var(--bg-tertiary)", zIndex: 3 }}></th>{/* C */}
+              <th className={hc} style={{ ...sticky3, background: "var(--bg-tertiary)", zIndex: 3 }}></th>{/* D */}
               <th className={hc}>Product Sales</th>{/* E */}
               <th className={hc}></th>{/* F */}
               <th className={hc}>Product Sales</th>{/* G */}
@@ -1293,10 +1335,10 @@ function BranchResults({
             </tr>
             {/* ── Header Row 2 ── */}
             <tr style={{ background: "var(--bg-tertiary)", color: "var(--text-secondary)" }}>
-              <th className={hc}></th>
-              <th className={hc}></th>
-              <th className={hc}></th>
-              <th className={hc}></th>
+              <th className={hc} style={{ ...sticky0, background: "var(--bg-tertiary)", zIndex: 3 }}></th>
+              <th className={hc} style={{ ...sticky1, background: "var(--bg-tertiary)", zIndex: 3 }}></th>
+              <th className={hc} style={{ ...sticky2, background: "var(--bg-tertiary)", zIndex: 3 }}></th>
+              <th className={hc} style={{ ...sticky3, background: "var(--bg-tertiary)", zIndex: 3 }}></th>
               <th className={hc}>(wk 1)</th>
               <th className={hc}>Booth Rent</th>
               <th className={hc}>(wk 2)</th>
@@ -1328,10 +1370,10 @@ function BranchResults({
             </tr>
             {/* ── Header Row 3 ── */}
             <tr style={{ background: "var(--bg-tertiary)", color: "var(--text-primary)", borderBottom: "2px solid var(--border-color)" }}>
-              <th className={hc}>Sub. ID</th>
-              <th className={hc}>Internal ID</th>
-              <th className={hc}>First Names</th>
-              <th className={hc}>Last Name</th>
+              <th className={hc} style={{ ...sticky0, background: "var(--bg-tertiary)", zIndex: 3 }}>Sub. ID</th>
+              <th className={hc} style={{ ...sticky1, background: "var(--bg-tertiary)", zIndex: 3 }}>Internal ID</th>
+              <th className={hc} style={{ ...sticky2, background: "var(--bg-tertiary)", zIndex: 3 }}>First Names</th>
+              <th className={hc} style={{ ...sticky3, background: "var(--bg-tertiary)", zIndex: 3 }}>Last Name</th>
               <th className={hc}></th>
               <th className={hc}>Rebate (wk 1)</th>
               <th className={hc}></th>
@@ -1377,11 +1419,11 @@ function BranchResults({
                   }}
                 >
                   {/* A: Subsidiary ID */}
-                  <td className={dc} style={{ color: "var(--text-secondary)" }}>{effectiveSubsidiaryId}</td>
+                  <td className={dc} style={{ ...sticky0, color: "var(--text-secondary)", background: rowIndex % 2 === 1 ? "var(--bg-tertiary)" : "var(--bg-primary)" }}>{effectiveSubsidiaryId}</td>
                   {/* B: Internal ID */}
-                  <td className={dc} style={{ color: "var(--text-secondary)" }}>{r.cfg.internalId || ""}</td>
+                  <td className={dc} style={{ ...sticky1, color: "var(--text-secondary)", background: rowIndex % 2 === 1 ? "var(--bg-tertiary)" : "var(--bg-primary)" }}>{r.cfg.internalId || ""}</td>
                   {/* C: First Names */}
-                  <td className={dc} style={{ color: "var(--text-primary)" }}>
+                  <td className={dc} style={{ ...sticky2, color: "var(--text-primary)", background: rowIndex % 2 === 1 ? "var(--bg-tertiary)" : "var(--bg-primary)" }}>
                     <span className="flex items-center gap-1">
                       {r.isAdded && (
                         <button
@@ -1397,7 +1439,7 @@ function BranchResults({
                     </span>
                   </td>
                   {/* D: Last Name */}
-                  <td className={dc} style={{ color: "var(--text-primary)" }}>{r.cfg.targetLast}</td>
+                  <td className={dc} style={{ ...sticky3, color: "var(--text-primary)", background: rowIndex % 2 === 1 ? "var(--bg-tertiary)" : "var(--bg-primary)" }}>{r.cfg.targetLast}</td>
                   {/* E: Product Sales (wk 1) — editable */}
                   <EditableCell value={r.productWk1} originalValue={(staffData[r.name]?.productWk1) || 0} onChange={(v) => setOverride(r.name, "productWk1", v)} color="var(--text-primary)" />
                   {/* F: Booth Rent Rebate (wk 1) — formula */}
@@ -1436,8 +1478,8 @@ function BranchResults({
                   <EditableCell value={r.phorestFee} originalValue={r.cfg.phorestFee} onChange={(v) => setOverride(r.name, "phorestFee", v)} color={r.phorestFee ? "#fb7185" : "var(--text-secondary)"} />
                   {/* W: Refreshment — editable */}
                   <EditableCell value={r.refreshment} originalValue={r.cfg.refreshment} onChange={(v) => setOverride(r.name, "refreshment", v)} color={r.refreshment ? "#fb7185" : "var(--text-secondary)"} />
-                  {/* X: Associate Fee — formula */}
-                  <td className={`${dc} text-right`} style={{ color: r.assocFee ? "#fb7185" : "var(--text-secondary)" }}>{fmt(r.assocFee)}</td>
+                  {/* X: Associate Fee — editable (auto-computed from associate pay, but manually overrideable) */}
+                  <EditableCell value={r.assocFee} originalValue={associateFees[r.name] || 0} onChange={(v) => setOverride(r.name, "associateFee", v)} color={r.assocFee ? "#fb7185" : "var(--text-secondary)"} />
                   {/* Y: Misc Fees — editable */}
                   <EditableCell value={r.miscFees} originalValue={0} onChange={(v) => setOverride(r.name, "miscFees", v)} color={r.miscFees ? "#fb7185" : "var(--text-secondary)"} />
                   {/* Z: Total Check — formula */}
