@@ -5,7 +5,7 @@ import {
   downloadCsv,
 } from "@/lib/phorestClient";
 import { processCSV, createStaffNameResolver } from "@/lib/payrollTransform";
-import { fetchStaffTips } from "@/lib/phorestLookerClient";
+
 import { generatePayrollExcel } from "@/lib/payrollExcel";
 import {
   fetchBranchConfigs,
@@ -94,42 +94,8 @@ export async function POST(request: NextRequest) {
       return data && data.length > 0 ? data : null;
     }
 
-    // ── Tips: check cache early + trigger GitHub Action if needed ──
-    // Trigger the Action BEFORE Phorest CSV work so it runs in parallel.
+    // ── Tips: check cache (populated by GitHub Action, triggered from frontend) ──
     let cachedTips = await readCachedTips();
-    let tipsActionTriggered = false;
-    const ghToken = process.env.GITHUB_PAT;
-
-    if (!cachedTips && ghToken) {
-      try {
-        const dispatchRes = await fetch(
-          "https://api.github.com/repos/Stackked-Tech/preston/actions/workflows/fetch-looker-tips.yml/dispatches",
-          {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${ghToken}`,
-              Accept: "application/vnd.github.v3+json",
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              ref: "main",
-              inputs: { branchId, startDate, endDate },
-            }),
-          }
-        );
-        tipsActionTriggered = dispatchRes.ok;
-        if (!dispatchRes.ok) {
-          const body = await dispatchRes.text().catch(() => "");
-          console.error(`[Tips] GitHub Action dispatch failed: ${dispatchRes.status} — ${body}`);
-        } else {
-          console.log(`[Tips] GitHub Action dispatched for ${branchId} (${startDate} to ${endDate})`);
-        }
-      } catch (err) {
-        console.error("[Tips] GitHub Action dispatch error:", err instanceof Error ? err.message : err);
-      }
-    } else if (!cachedTips && !ghToken) {
-      console.warn("[Tips] GITHUB_PAT not configured — cannot auto-trigger tips fetch");
-    }
 
     // 1. Create CSV export job
     const job = await createCsvExportJob(branchId, startDate, endDate);
@@ -201,55 +167,12 @@ export async function POST(request: NextRequest) {
     }
 
     if (cachedTips) {
-      // Tips were cached before CSV processing started
       applyTips(cachedTips);
       tipsSource = "supabase-cache";
-    } else if (tipsActionTriggered) {
-      // GitHub Action was triggered before CSV work — check if it finished
-      // during the ~15s of CSV processing (free check, no polling).
-      cachedTips = await readCachedTips();
-      if (cachedTips) {
-        applyTips(cachedTips);
-        tipsSource = "supabase-cache";
-      }
-      // If still no cache, the client auto-polls via /api/phorest/tips-status
-      // and fills tips in when they arrive — no re-run needed.
-    } else if (!ghToken) {
-      // No GITHUB_PAT — try live Looker as fallback (works locally)
-      try {
-        const lookerTips = await fetchStaffTips({
-          branchId,
-          branchName: branch.name,
-          startDate,
-          endDate,
-        });
-
-        for (const name of Object.keys(results.staffData)) {
-          results.staffData[name].tips = 0;
-        }
-        for (const [lookerName, paidToSalon] of lookerTips) {
-          const resolved = resolveName(lookerName) || lookerName;
-          if (results.staffData[resolved]) {
-            results.staffData[resolved].tips =
-              Math.round(paidToSalon * 100) / 100;
-          }
-        }
-        tipsSource = "looker";
-        if (lookerTips.size === 0) {
-          results.warnings.push(
-            "No tips found — enter manually."
-          );
-        }
-      } catch (err) {
-        results.warnings.push(
-          `Tips unavailable — enter manually. (${err instanceof Error ? err.message : "Unknown"})`
-        );
-      }
-    } else {
-      results.warnings.push(
-        "Tips auto-fetch failed (GitHub Action dispatch error). Click 'Fetch Tips from Phorest' to retry, or enter tips manually."
-      );
     }
+    // If no cache, tipsSource stays "csv-gc-fallback" — the frontend
+    // auto-triggers the GitHub Action and polls for results. No server-side
+    // dispatch needed (Looker doesn't work from Vercel serverless IPs).
 
     // 5. Generate Excel
     const excelBuffer = await generatePayrollExcel(results, branch, payPeriod);
