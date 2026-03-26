@@ -25,6 +25,7 @@ No test framework is configured.
 6. **Employee Admin** (`/employee-admin`) — Staff configuration management for payroll (names, NetSuite IDs, station leases, fees) across all WHB salon branches, backed by Supabase
 7. **Employee Portal** (`/employee`) — Employee-facing portal with Supabase Auth login, placeholder onboarding, and read-only fee dashboard
 8. **Hospitality Management** (`/hospitality`) — QR-code-driven maintenance request pipeline with tenant submission, manager approval workflow, maintenance staff task board (PWA), recurring task scheduling, and admin configuration. Features SMS notifications via Twilio and Spanish translation via Claude Haiku 4.5.
+9. **Construction Scheduler** (`/scheduler`) — Construction project scheduling with interactive Gantt chart, cascading task dependencies, subcontractor notifications via Twilio SMS, magic-link sub portal, phase management, and schedule templates.
 
 ## Tech Stack
 
@@ -60,6 +61,8 @@ No test framework is configured.
 /hospitality/request/[propertyId]   → Public tenant request form (QR code target)
 /hospitality/tasks                  → Maintenance staff task board (custom user login)
 /hospitality/admin                  → Admin panel (password gated)
+/scheduler                          → Construction scheduling dashboard (password gated)
+/scheduler/sub/[token]              → Public sub portal (magic link, read-only)
 ```
 
 ### Data Layer
@@ -74,6 +77,7 @@ Most database access is **client-side via Supabase SDK**. Each micro-app has its
 - `src/lib/employeeAuthHooks.ts` — Employee Portal (`useEmployeeAuth`)
 - `src/lib/employeePortalHooks.ts` — Employee Portal (`useEmployeeFees`)
 - `src/lib/hospitalityHooks.ts` — Hospitality Management (`useProperties`, `useRequesterTypes`, `useCategories`, `useHMUsers`, `useUserProperties`, `usePropertyByQrCode`, `useRequests`, `useSubmitRequest`, `useReviewRequest`, `useTasks`, `useTaskDetail`, `useTaskActions`, `useRecurringTasks`)
+- `src/lib/schedulerHooks.ts` — Construction Scheduler (`useProjects`, `usePhases`, `useTasks`, `useSubs`, `useSubTokens`, `useNotifications`, `useTemplates`, `useSubPortalTasks`, `cascadeTasks`)
 
 **Exception — Payout Suite:** Uses a server-side API route (`src/app/api/phorest/payroll/route.ts`) that calls the Phorest API, transforms CSV data, generates XLSX, and uploads to Supabase Storage.
 
@@ -95,6 +99,9 @@ Most database access is **client-side via Supabase SDK**. Each micro-app has its
 - `src/app/api/hospitality/auth/route.ts` — User login and password management (bcrypt)
 - `src/app/api/hospitality/recurring/route.ts` — Cron endpoint for recurring task generation
 
+**Exception — Construction Scheduler:** Uses a server-side API route for SMS notifications:
+- `src/app/api/scheduler/notify/route.ts` — Send schedule change SMS to subs via Twilio (batched per sub)
+
 Payout Suite key libs:
 - `src/lib/payrollTransform.ts` — Phorest CSV → per-staff payroll data
 - `src/lib/payrollExcel.ts` — XLSX generation for NetSuite import
@@ -106,7 +113,7 @@ Payout Suite key libs:
 
 ### Type Definitions (`src/types/`)
 
-Separate type files per domain: `database.ts` (Brain Dump), `timeclock.ts`, `signedtosealed.ts`, `paramount.ts`, `employeeadmin.ts`, `employeeportal.ts`, `hospitality.ts`. Insert/Update types are derived from main types using `Omit`.
+Separate type files per domain: `database.ts` (Brain Dump), `timeclock.ts`, `signedtosealed.ts`, `paramount.ts`, `employeeadmin.ts`, `employeeportal.ts`, `hospitality.ts`, `scheduler.ts`. Insert/Update types are derived from main types using `Omit`.
 
 ### Component Structure
 
@@ -119,6 +126,8 @@ Large feature components live in `src/components/`. Brain Dump, Time Clock, and 
 - `BulkMessageModal.tsx` — Multi-select with tag quick-select, SMS segment counter
 - `BroadcastHistory.tsx` — Expandable broadcast list with per-recipient delivery status
 - `MessageSearch.tsx` — Cmd+K search overlay with highlighted results
+
+Construction Scheduler uses 10 components in `src/components/scheduler/`: `SchedulerDashboard.tsx` (orchestrator), `ProjectList.tsx`, `ProjectDetail.tsx`, `GanttChart.tsx` (custom CSS grid Gantt with dependency arrows), `TaskEditor.tsx`, `PhaseManager.tsx`, `SubDirectory.tsx`, `SubPortal.tsx` (magic link view), `TemplateManager.tsx`, `NotificationLog.tsx`.
 
 Hospitality Management uses 18 components in `src/components/hospitality/`: `RequestForm.tsx` (public tenant form), `ManagerDashboard.tsx` (orchestrator), `RequestQueue.tsx`, `RequestReviewCard.tsx`, `ApprovalModal.tsx`, `RejectionModal.tsx`, `TaskBoard.tsx` (PWA orchestrator), `TaskList.tsx`, `TaskDetail.tsx`, `TaskStatusBar.tsx`, `TranslateButton.tsx`, `HospitalityAdmin.tsx` (admin orchestrator), `PropertyManager.tsx`, `UserManager.tsx`, `CategoryManager.tsx`, `RequesterTypeManager.tsx`, `RecurringTaskManager.tsx`, `StatsDashboard.tsx`.
 
@@ -155,8 +164,9 @@ Schema files at project root:
 - `supabase-paramount-schema.sql` — Paramount Communications tables (`pc_contacts`, `pc_messages`, `pc_broadcasts`, `pc_broadcast_recipients`, `pc_scheduled_messages`)
 - `supabase-employeeadmin-schema.sql` — Employee Admin tables (`ea_branches`, `ea_staff`, `ea_name_overrides`)
 - `supabase-hospitality-schema.sql` — Hospitality Management tables (`hm_properties`, `hm_requester_types`, `hm_categories`, `hm_users`, `hm_user_properties`, `hm_requests`, `hm_request_photos`, `hm_tasks`, `hm_task_notes`, `hm_task_photos`, `hm_task_time_logs`, `hm_task_materials`, `hm_recurring_tasks`)
+- `supabase-scheduler-schema.sql` — Construction Scheduler tables (`cs_projects`, `cs_phases`, `cs_tasks`, `cs_subs`, `cs_sub_tokens`, `cs_notifications`, `cs_templates`, `cs_template_phases`, `cs_template_tasks`)
 
-Time Clock tables use `tc_` prefix. Signed to Sealed tables use `sts_` prefix. Paramount Communications tables use `pc_` prefix. Employee Admin tables use `ea_` prefix. Hospitality Management tables use `hm_` prefix.
+Time Clock tables use `tc_` prefix. Signed to Sealed tables use `sts_` prefix. Paramount Communications tables use `pc_` prefix. Employee Admin tables use `ea_` prefix. Hospitality Management tables use `hm_` prefix. Construction Scheduler tables use `cs_` prefix.
 
 ## Environment Variables
 
@@ -177,6 +187,7 @@ TWILIO_HM_PHONE_NUMBER=<+1XXXXXXXXXX>          # Hospitality (dedicated Twilio n
 PHOREST_USER_EMAIL=<phorest-user-email>            # Payout Suite (Looker tips)
 PHOREST_USER_PASSWORD=<phorest-user-password>      # Payout Suite (Looker tips)
 PHOREST_BUSINESS_ID_INTERNAL=<business-id>         # Payout Suite (Looker tips, internal Phorest business ID)
+TWILIO_CS_PHONE_NUMBER=<+1XXXXXXXXXX>              # Construction Scheduler (optional dedicated Twilio number, falls back to TWILIO_PHONE_NUMBER)
 ```
 
 The Supabase client (`src/lib/supabase.ts`) creates a placeholder if env vars are missing — the app builds but shows error states at runtime.
