@@ -12,11 +12,11 @@ interface GanttChartProps {
   onTaskDrag: (taskId: string, newStartDate: string, newEndDate: string) => void;
 }
 
-const STATUS_COLORS: Record<string, string> = {
-  pending: "#6b7280",
-  in_progress: "#3b82f6",
-  completed: "#22c55e",
-  delayed: "#ef4444",
+const STATUS_COLORS: Record<string, { base: string; light: string }> = {
+  pending: { base: "#6b7280", light: "#9ca3af" },
+  in_progress: { base: "#3b82f6", light: "#60a5fa" },
+  completed: { base: "#22c55e", light: "#4ade80" },
+  delayed: { base: "#ef4444", light: "#f87171" },
 };
 
 export default function GanttChart({ tasks, phases, subs, onTaskClick, onTaskDrag }: GanttChartProps) {
@@ -218,39 +218,48 @@ export default function GanttChart({ tasks, phases, subs, onTaskClick, onTaskDra
 
       lines.push({
         x1: parentPos.left + parentPos.width,
-        y1: parentRowIdx * 40 + 20,
+        y1: parentRowIdx * 44 + 22,
         x2: childPos.left,
-        y2: childRowIdx * 40 + 20,
+        y2: childRowIdx * 44 + 22,
       });
     }
     return lines;
   }, [rows, tasks, getTaskPosition]);
 
-  const rowHeight = 40;
-  const labelWidth = 240;
+  const rowHeight = 44;
+  const labelWidth = 260;
   const chartWidth = totalDays * dayWidth;
   const chartHeight = rows.length * rowHeight;
 
   if (tasks.length === 0) {
     return (
-      <div className="flex items-center justify-center py-16" style={{ color: "var(--text-muted)" }}>
-        <p className="text-sm font-sans">No tasks yet. Add tasks to see the timeline.</p>
+      <div className="flex flex-col items-center justify-center py-16" style={{ color: "var(--text-muted)" }}>
+        <div
+          className="w-14 h-14 rounded-xl flex items-center justify-center mb-3"
+          style={{ background: "rgba(212, 175, 55, 0.08)" }}
+        >
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" opacity="0.5">
+            <line x1="4" y1="6" x2="14" y2="6" /><line x1="4" y1="12" x2="18" y2="12" /><line x1="4" y1="18" x2="10" y2="18" />
+          </svg>
+        </div>
+        <p className="text-sm font-sans font-medium mb-1" style={{ color: "var(--text-primary)" }}>No tasks yet</p>
+        <p className="text-xs font-sans" style={{ color: "var(--text-muted)" }}>Add tasks to see the timeline</p>
       </div>
     );
   }
 
   return (
     <div
-      className="border rounded-lg overflow-hidden"
-      style={{ borderColor: "var(--border-color)", background: "var(--bg-primary)" }}
+      className="border rounded-xl overflow-hidden"
+      style={{ borderColor: "var(--border-color)", background: "var(--bg-primary)", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}
     >
       <div className="flex overflow-x-auto" onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onMouseLeave={() => setDragging(null)}>
         {/* Labels column */}
         <div className="flex-shrink-0 border-r" style={{ width: labelWidth, borderColor: "var(--border-color)" }}>
           {/* Header */}
           <div
-            className="h-10 flex items-center px-3 border-b text-xs font-sans font-medium uppercase tracking-wider"
-            style={{ borderColor: "var(--border-color)", color: "var(--text-muted)", background: "var(--card-bg)" }}
+            className="flex items-center px-4 border-b text-[10px] font-sans font-semibold uppercase tracking-[1.5px]"
+            style={{ height: 40, borderColor: "var(--border-color)", color: "var(--text-muted)", background: "var(--bg-secondary)" }}
           >
             Task
           </div>
@@ -258,24 +267,31 @@ export default function GanttChart({ tasks, phases, subs, onTaskClick, onTaskDra
           {rows.map((row, i) => (
             <div
               key={i}
-              className="flex items-center px-3 border-b"
+              className="flex items-center px-4 border-b transition-colors"
               style={{
                 height: rowHeight,
                 borderColor: "var(--border-light)",
-                background: row.type === "phase" ? "var(--card-bg)" : "transparent",
+                background: row.type === "phase" ? "var(--bg-secondary)" : hoverTaskId === row.task?.id ? "var(--card-hover)" : "transparent",
               }}
             >
               {row.type === "phase" ? (
-                <span className="text-xs font-sans font-semibold uppercase tracking-wider" style={{ color: row.phase?.color || "var(--gold)" }}>
-                  {row.phase?.name}
-                </span>
+                <div className="flex items-center gap-2">
+                  <div className="w-2.5 h-2.5 rounded-full" style={{ background: row.phase?.color || "var(--gold)" }} />
+                  <span className="text-[11px] font-sans font-bold uppercase tracking-wider" style={{ color: row.phase?.color || "var(--gold)" }}>
+                    {row.phase?.name}
+                  </span>
+                </div>
               ) : (
                 <div className="flex flex-col min-w-0">
-                  <span className="text-xs font-sans truncate" style={{ color: "var(--text-primary)" }}>
+                  <span className="text-xs font-sans font-medium truncate" style={{ color: "var(--text-primary)" }}>
                     {row.task?.name}
                   </span>
                   {row.task?.sub_id && subMap.has(row.task.sub_id) && (
-                    <span className="text-[10px] font-sans truncate" style={{ color: "var(--text-muted)" }}>
+                    <span className="text-[10px] font-sans truncate flex items-center gap-1" style={{ color: "var(--text-muted)" }}>
+                      <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                        <circle cx="12" cy="7" r="4" />
+                      </svg>
                       {subMap.get(row.task.sub_id)?.name}
                     </span>
                   )}
@@ -289,13 +305,13 @@ export default function GanttChart({ tasks, phases, subs, onTaskClick, onTaskDra
         <div className="flex-1 overflow-x-auto" ref={containerRef}>
           {/* Week headers */}
           <div
-            className="h-10 relative border-b"
-            style={{ width: chartWidth, borderColor: "var(--border-color)", background: "var(--card-bg)" }}
+            className="relative border-b"
+            style={{ height: 40, width: chartWidth, borderColor: "var(--border-color)", background: "var(--bg-secondary)" }}
           >
             {weekHeaders.map((wh, i) => (
               <div
                 key={i}
-                className="absolute top-0 h-full flex items-center px-2 text-[10px] font-sans border-l"
+                className="absolute top-0 h-full flex items-center px-3 text-[10px] font-sans font-medium border-l tracking-wide"
                 style={{ left: wh.left, width: wh.width, borderColor: "var(--border-light)", color: "var(--text-muted)" }}
               >
                 {wh.label}
@@ -314,7 +330,7 @@ export default function GanttChart({ tasks, phases, subs, onTaskClick, onTaskDra
                   left: col.left,
                   width: dayWidth,
                   height: chartHeight,
-                  background: col.isToday ? "rgba(212, 175, 55, 0.1)" : col.isWeekend ? "rgba(0,0,0,0.03)" : "transparent",
+                  background: col.isToday ? "rgba(212, 175, 55, 0.08)" : col.isWeekend ? "rgba(0,0,0,0.025)" : "transparent",
                   borderLeft: "1px solid var(--border-light)",
                 }}
               />
@@ -333,6 +349,7 @@ export default function GanttChart({ tasks, phases, subs, onTaskClick, onTaskDra
                       height: chartHeight,
                       background: "var(--gold)",
                       zIndex: 5,
+                      boxShadow: "0 0 8px rgba(212, 175, 55, 0.3)",
                     }}
                   />
                 )
@@ -354,24 +371,24 @@ export default function GanttChart({ tasks, phases, subs, onTaskClick, onTaskDra
               height={chartHeight}
               style={{ zIndex: 3 }}
             >
+              <defs>
+                <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+                  <polygon points="0 0, 8 3, 0 6" fill="var(--gold)" opacity="0.7" />
+                </marker>
+              </defs>
               {dependencyLines.map((line, i) => {
                 const midX = line.x1 + (line.x2 - line.x1) / 2;
                 return (
-                  <g key={i}>
-                    <path
-                      d={`M ${line.x1} ${line.y1} C ${midX} ${line.y1}, ${midX} ${line.y2}, ${line.x2} ${line.y2}`}
-                      fill="none"
-                      stroke="var(--gold)"
-                      strokeWidth={1.5}
-                      opacity={0.6}
-                    />
-                    {/* Arrow head */}
-                    <polygon
-                      points={`${line.x2},${line.y2} ${line.x2 - 6},${line.y2 - 4} ${line.x2 - 6},${line.y2 + 4}`}
-                      fill="var(--gold)"
-                      opacity={0.6}
-                    />
-                  </g>
+                  <path
+                    key={i}
+                    d={`M ${line.x1} ${line.y1} C ${midX} ${line.y1}, ${midX} ${line.y2}, ${line.x2} ${line.y2}`}
+                    fill="none"
+                    stroke="var(--gold)"
+                    strokeWidth={1.5}
+                    opacity={0.5}
+                    strokeDasharray="4 2"
+                    markerEnd="url(#arrowhead)"
+                  />
                 );
               })}
             </svg>
@@ -382,6 +399,8 @@ export default function GanttChart({ tasks, phases, subs, onTaskClick, onTaskDra
               const task = row.task;
               const pos = getTaskPosition(task);
               const isDraggingThis = dragging?.taskId === task.id;
+              const isHovered = hoverTaskId === task.id;
+              const colors = STATUS_COLORS[task.status] || STATUS_COLORS.pending;
 
               // Calculate drag offset for visual preview
               let dragOffset = 0;
@@ -392,26 +411,50 @@ export default function GanttChart({ tasks, phases, subs, onTaskClick, onTaskDra
               return (
                 <div
                   key={task.id}
-                  className="absolute rounded-md cursor-pointer transition-shadow"
+                  className="absolute rounded-md cursor-pointer transition-all"
                   style={{
                     left: pos.left + dragOffset,
-                    top: row.index * rowHeight + 8,
+                    top: row.index * rowHeight + 10,
                     width: pos.width,
-                    height: rowHeight - 16,
-                    background: STATUS_COLORS[task.status] || STATUS_COLORS.pending,
-                    opacity: isDraggingThis ? 0.7 : hoverTaskId === task.id ? 0.9 : 0.8,
-                    zIndex: isDraggingThis ? 10 : 4,
-                    boxShadow: isDraggingThis ? "0 4px 12px rgba(0,0,0,0.3)" : hoverTaskId === task.id ? "0 2px 8px rgba(0,0,0,0.2)" : "none",
+                    height: rowHeight - 20,
+                    background: `linear-gradient(135deg, ${colors.base}, ${colors.light})`,
+                    opacity: isDraggingThis ? 0.8 : 1,
+                    zIndex: isDraggingThis ? 10 : isHovered ? 6 : 4,
+                    boxShadow: isDraggingThis
+                      ? `0 6px 16px rgba(0,0,0,0.25), 0 0 0 2px ${colors.base}`
+                      : isHovered
+                      ? `0 3px 10px rgba(0,0,0,0.15), 0 0 0 1px ${colors.base}40`
+                      : `0 1px 3px rgba(0,0,0,0.1)`,
+                    transform: isHovered && !isDraggingThis ? "translateY(-1px)" : "none",
                   }}
                   onClick={() => onTaskClick(task)}
                   onMouseDown={(e) => handleMouseDown(e, task)}
                   onMouseEnter={() => setHoverTaskId(task.id)}
                   onMouseLeave={() => setHoverTaskId(null)}
-                  title={`${task.name}\n${formatDateShort(task.start_date)} – ${formatDateShort(task.end_date)}`}
                 >
                   <div className="h-full flex items-center px-2 overflow-hidden">
-                    <span className="text-[10px] font-sans font-medium text-white truncate">{task.name}</span>
+                    <span className="text-[10px] font-sans font-semibold text-white truncate drop-shadow-sm">{task.name}</span>
                   </div>
+                  {/* Hover tooltip */}
+                  {isHovered && !isDraggingThis && (
+                    <div
+                      className="absolute left-1/2 -translate-x-1/2 -top-2 -translate-y-full z-20 px-3 py-2 rounded-lg text-[10px] font-sans whitespace-nowrap pointer-events-none"
+                      style={{
+                        background: "var(--bg-secondary)",
+                        border: "1px solid var(--border-color)",
+                        boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+                        color: "var(--text-primary)",
+                      }}
+                    >
+                      <div className="font-semibold mb-0.5">{task.name}</div>
+                      <div style={{ color: "var(--text-muted)" }}>
+                        {formatDateShort(task.start_date)} – {formatDateShort(task.end_date)} ({task.duration_days}d)
+                      </div>
+                      {task.sub_id && subMap.has(task.sub_id) && (
+                        <div style={{ color: "var(--gold)" }}>{subMap.get(task.sub_id)?.name}</div>
+                      )}
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -420,18 +463,18 @@ export default function GanttChart({ tasks, phases, subs, onTaskClick, onTaskDra
       </div>
 
       {/* Legend */}
-      <div className="flex items-center gap-4 px-4 py-2 border-t" style={{ borderColor: "var(--border-color)", background: "var(--card-bg)" }}>
-        {Object.entries(STATUS_COLORS).map(([status, color]) => (
+      <div className="flex items-center gap-5 px-4 py-2.5 border-t" style={{ borderColor: "var(--border-color)", background: "var(--bg-secondary)" }}>
+        {Object.entries(STATUS_COLORS).map(([status, colors]) => (
           <div key={status} className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded-sm" style={{ background: color, opacity: 0.8 }} />
-            <span className="text-[10px] font-sans capitalize" style={{ color: "var(--text-muted)" }}>
+            <div className="w-3 h-2.5 rounded-sm" style={{ background: `linear-gradient(135deg, ${colors.base}, ${colors.light})` }} />
+            <span className="text-[10px] font-sans font-medium capitalize tracking-wide" style={{ color: "var(--text-muted)" }}>
               {status.replace("_", " ")}
             </span>
           </div>
         ))}
         <div className="flex items-center gap-1.5 ml-auto">
-          <div className="w-3 h-0.5" style={{ background: "var(--gold)" }} />
-          <span className="text-[10px] font-sans" style={{ color: "var(--text-muted)" }}>
+          <div className="w-4 h-0.5 rounded-full" style={{ background: "var(--gold)", boxShadow: "0 0 4px rgba(212, 175, 55, 0.4)" }} />
+          <span className="text-[10px] font-sans font-medium" style={{ color: "var(--text-muted)" }}>
             Today
           </span>
         </div>

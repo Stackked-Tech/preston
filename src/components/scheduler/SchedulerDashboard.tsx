@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import Image from "next/image";
+import Link from "next/link";
 import { useTheme } from "@/lib/theme";
 import {
   useProjects,
@@ -11,19 +13,22 @@ import {
   useNotifications,
   useTemplates,
 } from "@/lib/schedulerHooks";
-import type { CSProject, CSTask, CSPhase, CSSub, CSSubInsert } from "@/types/scheduler";
+import type { CSTask, CSPhase, CSSub, CSSubInsert } from "@/types/scheduler";
 import ProjectList from "./ProjectList";
 import ProjectDetail from "./ProjectDetail";
 import SubDirectory from "./SubDirectory";
 import NotificationLog from "./NotificationLog";
 import TemplateManager from "./TemplateManager";
 
+type ViewTab = "schedule" | "subs" | "templates" | "notifications";
+
 export default function SchedulerDashboard() {
   const { theme, toggleTheme } = useTheme();
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
-  const [showSubs, setShowSubs] = useState(false);
-  const [showNotifications, setShowNotifications] = useState(false);
-  const [showTemplates, setShowTemplates] = useState(false);
+  const [activeTab, setActiveTab] = useState<ViewTab>("schedule");
+  const [showSubsModal, setShowSubsModal] = useState(false);
+  const [showNotificationsModal, setShowNotificationsModal] = useState(false);
+  const [showTemplatesModal, setShowTemplatesModal] = useState(false);
 
   // Data hooks
   const { projects, createProject, updateProject, deleteProject } = useProjects();
@@ -35,6 +40,11 @@ export default function SchedulerDashboard() {
   const { templates, createTemplate, deleteTemplate, applyTemplate } = useTemplates();
 
   const selectedProject = projects.find((p) => p.id === selectedProjectId) || null;
+
+  // Stats
+  const activeProjects = projects.filter((p) => p.status === "active").length;
+  const totalTasks = tasks.length;
+  const pendingNotifications = notifications.filter((n) => n.status === "pending").length;
 
   // Handlers
   const handleCreateProject = useCallback(
@@ -83,7 +93,6 @@ export default function SchedulerDashboard() {
     async (changes: { taskId: string; subId: string; taskName: string; oldStart: string; oldEnd: string; newStart: string; newEnd: string }[]) => {
       if (!selectedProject) return;
 
-      // Group changes by sub
       const bySubId = new Map<string, typeof changes>();
       for (const c of changes) {
         const existing = bySubId.get(c.subId) || [];
@@ -91,7 +100,6 @@ export default function SchedulerDashboard() {
         bySubId.set(c.subId, existing);
       }
 
-      // Send one notification per sub
       for (const [subId, subChanges] of bySubId) {
         try {
           await fetch("/api/scheduler/notify", {
@@ -138,49 +146,86 @@ export default function SchedulerDashboard() {
   );
 
   return (
-    <div className="min-h-screen flex flex-col" style={{ background: "var(--bg-primary)" }}>
-      {/* Top bar */}
+    <div className="h-screen flex flex-col" style={{ background: "var(--bg-primary)" }}>
+      {/* ─── Top Bar ─── */}
       <header
-        className="flex items-center justify-between px-6 py-3 border-b"
-        style={{ borderColor: "var(--border-color)" }}
+        className="flex items-center justify-between px-5 py-2.5 border-b"
+        style={{ borderColor: "var(--border-light)" }}
       >
         <div className="flex items-center gap-3">
-          <a href="/" className="text-xl no-underline">📅</a>
+          <Link href="/" className="text-xs no-underline" style={{ color: "var(--text-muted)" }}>
+            &larr;
+          </Link>
+          <Image
+            src="/wh-logo-circle-bw.png"
+            alt="WHB Companies"
+            width={32}
+            height={32}
+            className="object-contain rounded-full"
+            style={{ filter: theme === "dark" ? "invert(1)" : "none" }}
+          />
           <div>
-            <h1 className="text-base font-serif font-semibold m-0" style={{ color: "var(--text-primary)" }}>
+            <h1 className="text-sm font-serif font-semibold tracking-wide m-0" style={{ color: "var(--text-primary)" }}>
               Construction Scheduler
             </h1>
-            <p className="text-[10px] font-sans tracking-[2px] uppercase m-0" style={{ color: "var(--text-muted)" }}>
+            <p className="text-[10px] font-sans tracking-[1.5px] uppercase m-0" style={{ color: "var(--text-muted)" }}>
               WHB Companies
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowSubs(true)}
-            className="px-3 py-1.5 rounded-lg text-xs font-sans border transition-colors"
-            style={{ borderColor: "var(--border-color)", color: "var(--text-muted)" }}
-          >
-            👷 Subs
-          </button>
-          <button
-            onClick={() => setShowTemplates(true)}
-            className="px-3 py-1.5 rounded-lg text-xs font-sans border transition-colors"
-            style={{ borderColor: "var(--border-color)", color: "var(--text-muted)" }}
-          >
-            📋 Templates
-          </button>
-          <button
-            onClick={() => setShowNotifications(true)}
-            className="px-3 py-1.5 rounded-lg text-xs font-sans border transition-colors"
-            style={{ borderColor: "var(--border-color)", color: "var(--text-muted)" }}
-          >
-            🔔 Notifications
-          </button>
+          {/* Quick stats */}
+          <div className="hidden md:flex items-center gap-3 mr-4">
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg" style={{ background: "rgba(34, 197, 94, 0.08)" }}>
+              <span className="text-[10px]">🏗️</span>
+              <span className="text-[10px] font-sans font-medium" style={{ color: "#22c55e" }}>{activeProjects} Active</span>
+            </div>
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg" style={{ background: "rgba(212, 175, 55, 0.08)" }}>
+              <span className="text-[10px]">👷</span>
+              <span className="text-[10px] font-sans font-medium" style={{ color: "var(--gold)" }}>{subs.length} Subs</span>
+            </div>
+          </div>
+
+          {/* Nav tabs */}
+          <div className="flex rounded-lg border overflow-hidden" style={{ borderColor: "var(--border-light)" }}>
+            {([
+              { key: "schedule", label: "Schedule", icon: "📅" },
+              { key: "subs", label: "Subs", icon: "👷" },
+              { key: "templates", label: "Templates", icon: "📋" },
+              { key: "notifications", label: "Alerts", icon: "🔔" },
+            ] as const).map(({ key, label, icon }) => (
+              <button
+                key={key}
+                onClick={() => {
+                  if (key === "subs") setShowSubsModal(true);
+                  else if (key === "templates") setShowTemplatesModal(true);
+                  else if (key === "notifications") setShowNotificationsModal(true);
+                  else setActiveTab(key);
+                }}
+                className="px-3 py-1.5 text-[11px] font-sans font-medium tracking-wide uppercase transition-all duration-200 relative"
+                style={{
+                  background: activeTab === key ? "rgba(212, 175, 55, 0.12)" : "transparent",
+                  color: activeTab === key ? "var(--gold)" : "var(--text-muted)",
+                }}
+              >
+                <span className="hidden sm:inline">{icon} </span>
+                {label}
+                {key === "notifications" && notifications.length > 0 && (
+                  <span
+                    className="absolute -top-0.5 -right-0.5 min-w-[14px] h-[14px] rounded-full flex items-center justify-center text-[8px] font-bold"
+                    style={{ background: "var(--gold)", color: "#000" }}
+                  >
+                    {notifications.length > 9 ? "9+" : notifications.length}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+
           <button
             onClick={toggleTheme}
-            className="px-3 py-1.5 rounded-lg text-xs font-sans border transition-colors"
+            className="border px-2.5 py-1 rounded-lg text-xs font-sans tracking-[1px] uppercase transition-all duration-200"
             style={{ borderColor: "var(--border-color)", color: "var(--gold)" }}
           >
             {theme === "dark" ? "☀" : "●"}
@@ -188,7 +233,7 @@ export default function SchedulerDashboard() {
         </div>
       </header>
 
-      {/* Main content */}
+      {/* ─── Main Layout ─── */}
       <div className="flex-1 flex overflow-hidden">
         <ProjectList
           projects={projects}
@@ -216,43 +261,56 @@ export default function SchedulerDashboard() {
           />
         ) : (
           <div className="flex-1 flex items-center justify-center">
-            <div className="text-center">
-              <p className="text-4xl mb-4">📅</p>
-              <p className="text-sm font-sans" style={{ color: "var(--text-muted)" }}>
-                Select a project or create one to get started
+            <div className="text-center max-w-sm">
+              <div
+                className="w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-6"
+                style={{ background: "rgba(212, 175, 55, 0.08)" }}
+              >
+                <span className="text-4xl">📅</span>
+              </div>
+              <h3 className="text-lg font-serif font-semibold mb-2" style={{ color: "var(--text-primary)" }}>
+                No Project Selected
+              </h3>
+              <p className="text-sm font-sans leading-relaxed" style={{ color: "var(--text-muted)" }}>
+                Select a project from the sidebar or create a new one to start building your construction schedule.
               </p>
+              {projects.length === 0 && (
+                <p className="text-xs font-sans mt-4 px-4 py-2 rounded-lg inline-block" style={{ background: "rgba(212, 175, 55, 0.08)", color: "var(--gold)" }}>
+                  Click &ldquo;+&rdquo; in the sidebar to create your first project
+                </p>
+              )}
             </div>
           </div>
         )}
       </div>
 
-      {/* Modals */}
-      {showSubs && (
+      {/* ─── Modals ─── */}
+      {showSubsModal && (
         <SubDirectory
           subs={subs}
           onCreateSub={async (sub: CSSubInsert) => { await createSub(sub); }}
           onUpdateSub={async (id: string, updates: Partial<CSSub>) => { await updateSub(id, updates); }}
           onDeleteSub={async (id: string) => { await deleteSub(id); }}
           onGenerateLink={generateToken}
-          onClose={() => setShowSubs(false)}
+          onClose={() => setShowSubsModal(false)}
         />
       )}
 
-      {showNotifications && (
+      {showNotificationsModal && (
         <NotificationLog
           notifications={notifications}
           subs={subs}
-          onClose={() => setShowNotifications(false)}
+          onClose={() => setShowNotificationsModal(false)}
         />
       )}
 
-      {showTemplates && (
+      {showTemplatesModal && (
         <TemplateManager
           templates={templates}
           onApplyTemplate={handleApplyTemplate}
           onCreateTemplate={handleCreateTemplate}
           onDeleteTemplate={deleteTemplate}
-          onClose={() => setShowTemplates(false)}
+          onClose={() => setShowTemplatesModal(false)}
         />
       )}
     </div>
