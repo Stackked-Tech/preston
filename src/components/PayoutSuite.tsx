@@ -430,14 +430,14 @@ export default function PayoutSuite() {
           </Link>
           <div>
             <h1
-              className="text-lg font-sans font-medium tracking-wide m-0"
+              className="text-xl font-sans font-semibold tracking-wide m-0"
               style={{ color: "var(--text-primary)" }}
             >
               Payout Suite
             </h1>
             <p
-              className="text-[10px] font-sans tracking-[1.5px] uppercase m-0"
-              style={{ color: "var(--text-muted)" }}
+              className="text-xs font-sans tracking-[1.5px] uppercase m-0"
+              style={{ color: "var(--text-secondary)" }}
             >
               Payroll Processing
             </p>
@@ -462,8 +462,8 @@ export default function PayoutSuite() {
       >
         <div className="flex flex-col gap-1">
           <label
-            className="text-[10px] font-sans tracking-[1.5px] uppercase"
-            style={{ color: "var(--text-muted)" }}
+            className="text-xs font-sans font-medium tracking-[1.5px] uppercase"
+            style={{ color: "var(--text-secondary)" }}
           >
             Period Start
           </label>
@@ -471,7 +471,7 @@ export default function PayoutSuite() {
             type="date"
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
-            className="px-3 py-2 rounded-md border text-sm font-sans"
+            className="px-3 py-2.5 rounded-md border text-sm font-sans"
             style={{
               background: "var(--input-bg)",
               borderColor: "var(--border-light)",
@@ -482,8 +482,8 @@ export default function PayoutSuite() {
 
         <div className="flex flex-col gap-1">
           <label
-            className="text-[10px] font-sans tracking-[1.5px] uppercase"
-            style={{ color: "var(--text-muted)" }}
+            className="text-xs font-sans font-medium tracking-[1.5px] uppercase"
+            style={{ color: "var(--text-secondary)" }}
           >
             Period End
           </label>
@@ -491,7 +491,7 @@ export default function PayoutSuite() {
             type="date"
             value={endDate}
             onChange={(e) => setEndDate(e.target.value)}
-            className="px-3 py-2 rounded-md border text-sm font-sans"
+            className="px-3 py-2.5 rounded-md border text-sm font-sans"
             style={{
               background: "var(--input-bg)",
               borderColor: "var(--border-light)",
@@ -503,8 +503,8 @@ export default function PayoutSuite() {
         {payDate && (
           <div className="flex flex-col gap-1">
             <label
-              className="text-[10px] font-sans tracking-[1.5px] uppercase"
-              style={{ color: "var(--text-muted)" }}
+              className="text-xs font-sans font-medium tracking-[1.5px] uppercase"
+              style={{ color: "var(--text-secondary)" }}
             >
               Pay Date (auto)
             </label>
@@ -524,7 +524,7 @@ export default function PayoutSuite() {
         <button
           onClick={runPayroll}
           disabled={!startDate || !endDate || isRunning || selectedBranches.size === 0}
-          className="px-6 py-2 rounded-md text-sm font-sans font-medium tracking-wide transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+          className="px-6 py-2.5 rounded-md text-sm font-sans font-semibold tracking-wide transition-all disabled:opacity-40 disabled:cursor-not-allowed"
           style={{
             background: "var(--gold)",
             color: "#0a0b0e",
@@ -565,13 +565,13 @@ export default function PayoutSuite() {
                   checked={isSelected}
                   onChange={() => toggleBranch(branch.branchId)}
                   className="ml-3 accent-[var(--gold)] cursor-pointer"
-                  style={{ width: 14, height: 14 }}
+                  style={{ width: 18, height: 18 }}
                   title={isSelected ? `Exclude ${branch.name}` : `Include ${branch.name}`}
                 />
               )}
               <button
                 onClick={() => setActiveTab(branch.branchId)}
-                className="px-4 py-3 text-xs font-sans tracking-wide whitespace-nowrap transition-all"
+                className="px-4 py-3 text-sm font-sans font-medium tracking-wide whitespace-nowrap transition-all"
                 style={{
                   color: isActive
                     ? "var(--gold)"
@@ -618,13 +618,13 @@ export default function PayoutSuite() {
             }}
           >
             <span
-              className="text-xs font-sans"
-              style={{ color: "var(--text-muted)" }}
+              className="text-sm font-sans font-medium"
+              style={{ color: "var(--text-secondary)" }}
             >
               Color Report
             </span>
             <label
-              className="px-3 py-1.5 rounded-md border text-xs font-sans cursor-pointer transition-all"
+              className="px-3 py-2 rounded-md border text-sm font-sans cursor-pointer transition-all"
               style={{
                 background: "var(--input-bg)",
                 borderColor: colorChargesCsvs[activeTab]
@@ -650,16 +650,16 @@ export default function PayoutSuite() {
             {colorChargesCsvs[activeTab] && (
               <button
                 onClick={() => clearColorCharges(activeTab)}
-                className="text-xs font-sans"
-                style={{ color: "var(--text-muted)" }}
+                className="text-sm font-sans"
+                style={{ color: "var(--text-secondary)" }}
               >
                 Clear
               </button>
             )}
             {!colorChargesCsvs[activeTab] && (
               <span
-                className="text-[10px] font-sans"
-                style={{ color: "var(--text-muted)" }}
+                className="text-xs font-sans"
+                style={{ color: "var(--text-secondary)" }}
               >
                 Upload the Phorest color stylist list report to auto-fill Column P
               </span>
@@ -837,7 +837,7 @@ function EditableCell({
 
   if (editing) {
     return (
-      <td className="px-1 py-0.5" style={style}>
+      <td className="px-2 py-1" style={style}>
         <input
           autoFocus
           type="number"
@@ -857,7 +857,7 @@ function EditableCell({
             }
             if (e.key === "Escape") setEditing(false);
           }}
-          className="w-full text-right text-[11px] font-sans px-1 py-0.5 rounded border outline-none"
+          className="w-full text-right text-[13px] font-sans px-2 py-1 rounded border outline-none"
           style={{
             background: "var(--input-bg)",
             borderColor: "var(--gold)",
@@ -870,7 +870,7 @@ function EditableCell({
 
   return (
     <td
-      className="px-2 py-1.5 whitespace-nowrap text-right cursor-pointer hover:opacity-80"
+      className="px-3 py-2.5 whitespace-nowrap text-right cursor-pointer hover:opacity-80"
       style={{
         color: color || "var(--text-secondary)",
         background: isOverridden ? "rgba(212, 175, 55, 0.08)" : undefined,
@@ -1069,8 +1069,8 @@ function BranchResults({
   const totalPayroll = rows.reduce((sum, r) => sum + r.totalCheck, 0);
 
   // Header cell styling
-  const hc = "px-2 py-1 font-medium whitespace-nowrap";
-  const dc = "px-2 py-1.5 whitespace-nowrap";
+  const hc = "px-3 py-2 font-semibold whitespace-nowrap";
+  const dc = "px-3 py-2.5 whitespace-nowrap";
   const manualBg = "rgba(251, 191, 36, 0.06)";
 
   return (
@@ -1079,14 +1079,14 @@ function BranchResults({
       <div className="flex items-center justify-between mb-4">
         <div>
           <h2
-            className="text-sm font-sans font-medium m-0"
+            className="text-base font-sans font-semibold m-0"
             style={{ color: "var(--text-primary)" }}
           >
             {data.branchName}
           </h2>
           <p
-            className="text-xs font-sans m-0 mt-1 flex items-center gap-1 flex-wrap"
-            style={{ color: "var(--text-muted)" }}
+            className="text-sm font-sans m-0 mt-1 flex items-center gap-1 flex-wrap"
+            style={{ color: "var(--text-secondary)" }}
           >
             Pay Period: {data.payPeriod} &middot; Pay Date: {data.payDate}{" "}
             &middot; {data.totalRows} transactions processed
@@ -1098,7 +1098,7 @@ function BranchResults({
                 const v = parseInt(e.target.value);
                 if (!isNaN(v)) setSubsidiaryOverride(v);
               }}
-              className="w-12 text-center text-xs font-sans rounded border outline-none"
+              className="w-14 text-center text-sm font-sans rounded border outline-none"
               style={{
                 background: subsidiaryOverride !== null ? "rgba(212, 175, 55, 0.08)" : "transparent",
                 borderColor: subsidiaryOverride !== null ? "var(--gold)" : "var(--border-light)",
@@ -1112,15 +1112,15 @@ function BranchResults({
           {(Object.keys(overrides).length > 0 || subsidiaryOverride !== null || addedStaff.length > 0) && (
             <button
               onClick={() => { setOverrides({}); setSubsidiaryOverride(null); setAddedStaff([]); }}
-              className="px-3 py-2 rounded-md text-xs font-sans font-medium tracking-wide transition-all border"
-              style={{ borderColor: "var(--border-light)", color: "var(--text-secondary)" }}
+              className="px-4 py-2.5 rounded-md text-sm font-sans font-medium tracking-wide transition-all border"
+              style={{ borderColor: "var(--border-light)", color: "var(--text-primary)" }}
             >
               Reset Edits
             </button>
           )}
           <button
             onClick={handleDownload}
-            className="px-4 py-2 rounded-md text-xs font-sans font-medium tracking-wide transition-all"
+            className="px-5 py-2.5 rounded-md text-sm font-sans font-semibold tracking-wide transition-all"
             style={{ background: "var(--gold)", color: "#0a0b0e" }}
           >
             {(Object.keys(overrides).length > 0 || addedStaff.length > 0) ? "Download Edited XLSX" : "Download XLSX"}
@@ -1131,11 +1131,11 @@ function BranchResults({
       {/* Warnings + Fetch Tips */}
       {warnings.length > 0 && (
         <div
-          className="mb-4 p-3 rounded-lg border text-xs font-sans"
+          className="mb-4 p-4 rounded-lg border text-sm font-sans"
           style={{
-            borderColor: "rgba(251, 191, 36, 0.3)",
-            background: "rgba(251, 191, 36, 0.05)",
-            color: "#fbbf24",
+            borderColor: "var(--border-color)",
+            background: "var(--bg-tertiary)",
+            color: "var(--text-primary)",
           }}
         >
           {warnings.map((w, i) => (
@@ -1145,16 +1145,16 @@ function BranchResults({
       )}
 
       {/* Tips source indicator + Fetch Tips button */}
-      <div className="mb-4 flex items-center gap-3 text-xs font-sans" style={{ color: "var(--text-muted)" }}>
+      <div className="mb-4 flex items-center gap-3 text-sm font-sans" style={{ color: "var(--text-secondary)" }}>
         <span>
-          Tips source: <strong style={{ color: data.tipsSource === "supabase-cache" ? "#22c55e" : data.tipsSource === "looker" ? "#22c55e" : "#fbbf24" }}>
+          Tips source: <strong style={{ color: data.tipsSource === "supabase-cache" ? "#22c55e" : data.tipsSource === "looker" ? "#22c55e" : "#e87c03" }}>
             {data.tipsSource === "supabase-cache" ? "Phorest (cached)" : data.tipsSource === "looker" ? "Phorest (live)" : "Manual entry needed"}
           </strong>
         </span>
         <button
           onClick={onFetchTips}
           disabled={fetchingTips || !canFetchTips}
-          className="px-3 py-1 rounded text-xs font-medium transition-all disabled:opacity-40"
+          className="px-4 py-2 rounded text-sm font-medium transition-all disabled:opacity-40"
           style={{
             border: "1px solid var(--border-color)",
             background: "var(--bg-secondary)",
@@ -1174,7 +1174,7 @@ function BranchResults({
       <div className="mb-4 relative inline-block">
         <button
           onClick={() => setShowAddMenu((v) => !v)}
-          className="px-3 py-1.5 rounded text-xs font-sans font-medium transition-all border flex items-center gap-1.5"
+          className="px-4 py-2 rounded text-sm font-sans font-medium transition-all border flex items-center gap-1.5"
           style={{
             border: "1px solid var(--border-color)",
             background: "var(--bg-secondary)",
@@ -1187,33 +1187,34 @@ function BranchResults({
           <div
             className="absolute top-full left-0 mt-1 rounded-lg border shadow-lg z-50 py-1 max-h-64 overflow-y-auto"
             style={{
-              background: "var(--card-bg)",
+              background: "var(--bg-secondary, #1a1b1e)",
               borderColor: "var(--border-light)",
               minWidth: 240,
+              backdropFilter: "none",
             }}
           >
             {missingStaff.length > 0 && (
               <>
-                <div className="px-3 py-1.5 text-[10px] font-sans uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+                <div className="px-3 py-2 text-xs font-sans font-medium uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
                   Configured Staff
                 </div>
                 {missingStaff.map((name) => (
                   <button
                     key={name}
                     onClick={() => addStaffMember(name)}
-                    className="block w-full text-left px-3 py-1.5 text-xs font-sans hover:bg-white/5 transition-colors"
+                    className="block w-full text-left px-3 py-2 text-sm font-sans hover:bg-white/10 transition-colors"
                     style={{ color: "var(--text-primary)" }}
                   >
                     {name}
                     {staffConfig[name]?.associatePay != null && (
-                      <span className="ml-2 text-[10px]" style={{ color: "var(--text-muted)" }}>associate</span>
+                      <span className="ml-2 text-xs" style={{ color: "var(--text-secondary)" }}>associate</span>
                     )}
                   </button>
                 ))}
                 <div className="mx-2 my-1 border-t" style={{ borderColor: "var(--border-light)" }} />
               </>
             )}
-            <div className="px-3 py-1.5 text-[10px] font-sans uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+            <div className="px-3 py-2 text-xs font-sans font-medium uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
               Custom Name
             </div>
             <form
@@ -1224,7 +1225,7 @@ function BranchResults({
                 value={customName}
                 onChange={(e) => setCustomName(e.target.value)}
                 placeholder="First Last"
-                className="flex-1 px-2 py-1 rounded text-xs border outline-none"
+                className="flex-1 px-2 py-1.5 rounded text-sm border outline-none"
                 style={{
                   background: "var(--bg-primary)",
                   borderColor: "var(--border-light)",
@@ -1251,12 +1252,12 @@ function BranchResults({
         style={{ borderColor: "var(--border-light)" }}
       >
         <table
-          className="text-[11px] font-sans border-collapse"
+          className="text-[13px] font-sans border-collapse"
           style={{ minWidth: 2800 }}
         >
           {/* ── Header Row 1 ── */}
           <thead>
-            <tr style={{ background: "var(--bg-tertiary)", color: "var(--text-muted)" }}>
+            <tr style={{ background: "var(--bg-tertiary)", color: "var(--text-secondary)" }}>
               <th className={hc}></th>{/* A */}
               <th className={hc}></th>{/* B */}
               <th className={hc}></th>{/* C */}
@@ -1291,7 +1292,7 @@ function BranchResults({
               <th className={hc}>Pay</th>{/* AF */}
             </tr>
             {/* ── Header Row 2 ── */}
-            <tr style={{ background: "var(--bg-tertiary)", color: "var(--text-muted)" }}>
+            <tr style={{ background: "var(--bg-tertiary)", color: "var(--text-secondary)" }}>
               <th className={hc}></th>
               <th className={hc}></th>
               <th className={hc}></th>
@@ -1326,7 +1327,7 @@ function BranchResults({
               <th className={hc}>Period</th>
             </tr>
             {/* ── Header Row 3 ── */}
-            <tr style={{ background: "var(--bg-tertiary)", color: "var(--text-secondary)", borderBottom: "2px solid var(--border-color)" }}>
+            <tr style={{ background: "var(--bg-tertiary)", color: "var(--text-primary)", borderBottom: "2px solid var(--border-color)" }}>
               <th className={hc}>Sub. ID</th>
               <th className={hc}>Internal ID</th>
               <th className={hc}>First Names</th>
@@ -1362,7 +1363,7 @@ function BranchResults({
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => {
+            {rows.map((r, rowIndex) => {
               const payDateObj = new Date(data.payDate + "T12:00:00");
               const payDateRef = `ACH ${payDateObj.getMonth() + 1}.${payDateObj.getDate()}.${payDateObj.getFullYear()}`;
 
@@ -1370,19 +1371,22 @@ function BranchResults({
                 <tr
                   key={r.name}
                   className="border-t"
-                  style={{ borderColor: "var(--border-light)" }}
+                  style={{
+                    borderColor: "var(--border-color)",
+                    background: rowIndex % 2 === 1 ? "var(--bg-tertiary)" : undefined,
+                  }}
                 >
                   {/* A: Subsidiary ID */}
-                  <td className={dc} style={{ color: "var(--text-muted)" }}>{effectiveSubsidiaryId}</td>
+                  <td className={dc} style={{ color: "var(--text-secondary)" }}>{effectiveSubsidiaryId}</td>
                   {/* B: Internal ID */}
-                  <td className={dc} style={{ color: "var(--text-muted)" }}>{r.cfg.internalId || ""}</td>
+                  <td className={dc} style={{ color: "var(--text-secondary)" }}>{r.cfg.internalId || ""}</td>
                   {/* C: First Names */}
                   <td className={dc} style={{ color: "var(--text-primary)" }}>
                     <span className="flex items-center gap-1">
                       {r.isAdded && (
                         <button
                           onClick={() => removeAddedStaff(r.name)}
-                          className="text-[10px] rounded-full w-4 h-4 flex items-center justify-center shrink-0 hover:opacity-80"
+                          className="text-xs rounded-full w-4 h-4 flex items-center justify-center shrink-0 hover:opacity-80"
                           style={{ background: "rgba(239,68,68,0.15)", color: "#ef4444" }}
                           title="Remove added staff"
                         >
@@ -1395,89 +1399,89 @@ function BranchResults({
                   {/* D: Last Name */}
                   <td className={dc} style={{ color: "var(--text-primary)" }}>{r.cfg.targetLast}</td>
                   {/* E: Product Sales (wk 1) — editable */}
-                  <EditableCell value={r.productWk1} originalValue={(staffData[r.name]?.productWk1) || 0} onChange={(v) => setOverride(r.name, "productWk1", v)} color="var(--text-secondary)" />
+                  <EditableCell value={r.productWk1} originalValue={(staffData[r.name]?.productWk1) || 0} onChange={(v) => setOverride(r.name, "productWk1", v)} color="var(--text-primary)" />
                   {/* F: Booth Rent Rebate (wk 1) — formula */}
-                  <td className={`${dc} text-right`} style={{ color: "var(--text-secondary)" }}>{fmt(r.rebateWk1)}</td>
+                  <td className={`${dc} text-right`} style={{ color: "var(--text-primary)" }}>{fmt(r.rebateWk1)}</td>
                   {/* G: Product Sales (wk 2) — editable */}
-                  <EditableCell value={r.productWk2} originalValue={(staffData[r.name]?.productWk2) || 0} onChange={(v) => setOverride(r.name, "productWk2", v)} color="var(--text-secondary)" />
+                  <EditableCell value={r.productWk2} originalValue={(staffData[r.name]?.productWk2) || 0} onChange={(v) => setOverride(r.name, "productWk2", v)} color="var(--text-primary)" />
                   {/* H: Booth Rent Rebate (wk 2) — formula */}
-                  <td className={`${dc} text-right`} style={{ color: "var(--text-secondary)" }}>{fmt(r.rebateWk2)}</td>
+                  <td className={`${dc} text-right`} style={{ color: "var(--text-primary)" }}>{fmt(r.rebateWk2)}</td>
                   {/* I: Booth Rent Rebate Total — formula */}
-                  <td className={`${dc} text-right`} style={{ color: "var(--text-secondary)" }}>{fmt(r.rebateTotal)}</td>
+                  <td className={`${dc} text-right`} style={{ color: "var(--text-primary)" }}>{fmt(r.rebateTotal)}</td>
                   {/* J: Tips — editable */}
-                  <EditableCell value={r.tips} originalValue={(staffData[r.name]?.tips) || 0} onChange={(v) => setOverride(r.name, "tips", v)} color="var(--text-secondary)" />
+                  <EditableCell value={r.tips} originalValue={(staffData[r.name]?.tips) || 0} onChange={(v) => setOverride(r.name, "tips", v)} color="var(--text-primary)" />
                   {/* K: Contractor Service — editable */}
                   <EditableCell value={r.contractorService} originalValue={(staffData[r.name]?.contractorService) || 0} onChange={(v) => setOverride(r.name, "contractorService", v)} color="var(--gold)" />
                   {/* L: Associate Pay — editable */}
                   <EditableCell value={r.associatePay} originalValue={(staffData[r.name]?.associatePay) || 0} onChange={(v) => setOverride(r.name, "associatePay", v)} color="var(--gold)" />
                   {/* M: Total Earned — formula */}
-                  <td className={`${dc} text-right font-medium`} style={{ color: "var(--text-primary)" }}>{fmt(r.totalEarned)}</td>
+                  <td className={`${dc} text-right font-semibold`} style={{ color: "var(--text-primary)" }}>{fmt(r.totalEarned)}</td>
                   {/* N: Station Lease — editable */}
-                  <EditableCell value={r.stationLease} originalValue={r.cfg.stationLease} onChange={(v) => setOverride(r.name, "stationLease", v)} color={r.stationLease ? "#f87171" : "var(--text-muted)"} />
+                  <EditableCell value={r.stationLease} originalValue={r.cfg.stationLease} onChange={(v) => setOverride(r.name, "stationLease", v)} color={r.stationLease ? "#fb7185" : "var(--text-secondary)"} />
                   {/* O: Financial Services — editable */}
-                  <EditableCell value={r.financialServices} originalValue={r.cfg.financialServices} onChange={(v) => setOverride(r.name, "financialServices", v)} color={r.financialServices ? "#f87171" : "var(--text-muted)"} />
+                  <EditableCell value={r.financialServices} originalValue={r.cfg.financialServices} onChange={(v) => setOverride(r.name, "financialServices", v)} color={r.financialServices ? "#fb7185" : "var(--text-secondary)"} />
                   {/* P: Color Charges — editable */}
-                  <EditableCell value={r.colorCharges} originalValue={staffData[r.name]?.colorCharges ? -staffData[r.name].colorCharges : 0} onChange={(v) => setOverride(r.name, "colorCharges", v)} color={r.colorCharges ? "#f87171" : "var(--text-muted)"} />
+                  <EditableCell value={r.colorCharges} originalValue={staffData[r.name]?.colorCharges ? -staffData[r.name].colorCharges : 0} onChange={(v) => setOverride(r.name, "colorCharges", v)} color={r.colorCharges ? "#fb7185" : "var(--text-secondary)"} />
                   {/* Q: Credit Card Amount — editable */}
-                  <EditableCell value={r.creditCardAmount} originalValue={(staffData[r.name]?.creditCardAmount) || 0} onChange={(v) => setOverride(r.name, "creditCardAmount", v)} color="var(--text-secondary)" />
+                  <EditableCell value={r.creditCardAmount} originalValue={(staffData[r.name]?.creditCardAmount) || 0} onChange={(v) => setOverride(r.name, "creditCardAmount", v)} color="var(--text-primary)" />
                   {/* R: CC Charges 3% — formula */}
-                  <td className={`${dc} text-right`} style={{ color: "var(--text-muted)" }}>{fmt(r.ccCharges)}</td>
+                  <td className={`${dc} text-right`} style={{ color: "var(--text-secondary)" }}>{fmt(r.ccCharges)}</td>
                   {/* S: New Guests — editable */}
-                  <EditableCell value={r.newGuests} originalValue={(staffData[r.name]?.newGuests) || 0} onChange={(v) => setOverride(r.name, "newGuests", v)} color="var(--text-secondary)" />
+                  <EditableCell value={r.newGuests} originalValue={(staffData[r.name]?.newGuests) || 0} onChange={(v) => setOverride(r.name, "newGuests", v)} color="var(--text-primary)" />
                   {/* T: Finders Fee 20% — formula */}
-                  <td className={`${dc} text-right`} style={{ color: r.findersFee ? "#f87171" : "var(--text-muted)" }}>{fmt(r.findersFee)}</td>
+                  <td className={`${dc} text-right`} style={{ color: r.findersFee ? "#fb7185" : "var(--text-secondary)" }}>{fmt(r.findersFee)}</td>
                   {/* U: Employee Purchases — editable */}
-                  <EditableCell value={r.employeePurchases} originalValue={(staffData[r.name]?.employeePurchases) || 0} onChange={(v) => setOverride(r.name, "employeePurchases", v)} color={r.empPurch ? "#f87171" : "var(--text-muted)"} />
+                  <EditableCell value={r.employeePurchases} originalValue={(staffData[r.name]?.employeePurchases) || 0} onChange={(v) => setOverride(r.name, "employeePurchases", v)} color={r.empPurch ? "#fb7185" : "var(--text-secondary)"} />
                   {/* V: Phorest — editable */}
-                  <EditableCell value={r.phorestFee} originalValue={r.cfg.phorestFee} onChange={(v) => setOverride(r.name, "phorestFee", v)} color={r.phorestFee ? "#f87171" : "var(--text-muted)"} />
+                  <EditableCell value={r.phorestFee} originalValue={r.cfg.phorestFee} onChange={(v) => setOverride(r.name, "phorestFee", v)} color={r.phorestFee ? "#fb7185" : "var(--text-secondary)"} />
                   {/* W: Refreshment — editable */}
-                  <EditableCell value={r.refreshment} originalValue={r.cfg.refreshment} onChange={(v) => setOverride(r.name, "refreshment", v)} color={r.refreshment ? "#f87171" : "var(--text-muted)"} />
+                  <EditableCell value={r.refreshment} originalValue={r.cfg.refreshment} onChange={(v) => setOverride(r.name, "refreshment", v)} color={r.refreshment ? "#fb7185" : "var(--text-secondary)"} />
                   {/* X: Associate Fee — formula */}
-                  <td className={`${dc} text-right`} style={{ color: r.assocFee ? "#f87171" : "var(--text-muted)" }}>{fmt(r.assocFee)}</td>
+                  <td className={`${dc} text-right`} style={{ color: r.assocFee ? "#fb7185" : "var(--text-secondary)" }}>{fmt(r.assocFee)}</td>
                   {/* Y: Misc Fees — editable */}
-                  <EditableCell value={r.miscFees} originalValue={0} onChange={(v) => setOverride(r.name, "miscFees", v)} color={r.miscFees ? "#f87171" : "var(--text-muted)"} />
+                  <EditableCell value={r.miscFees} originalValue={0} onChange={(v) => setOverride(r.name, "miscFees", v)} color={r.miscFees ? "#fb7185" : "var(--text-secondary)"} />
                   {/* Z: Total Check — formula */}
-                  <td className={`${dc} text-right font-medium`} style={{ color: r.totalCheck > 0 ? "#4ade80" : r.totalCheck < 0 ? "#f87171" : "var(--text-muted)" }}>{fmt(r.totalCheck)}</td>
+                  <td className={`${dc} text-right font-semibold`} style={{ color: r.totalCheck > 0 ? "#4ade80" : r.totalCheck < 0 ? "#fb7185" : "var(--text-secondary)" }}>{fmt(r.totalCheck)}</td>
                   {/* AA: Account */}
-                  <td className={dc} style={{ color: "var(--text-muted)" }}>{data.account}</td>
+                  <td className={dc} style={{ color: "var(--text-secondary)" }}>{data.account}</td>
                   {/* AB: Posting Period */}
-                  <td className={dc} style={{ color: "var(--text-muted)" }}>{data.payPeriod.split("-")[0]?.split("/")[0]}/1</td>
+                  <td className={dc} style={{ color: "var(--text-secondary)" }}>{data.payPeriod.split("-")[0]?.split("/")[0]}/1</td>
                   {/* AC: Reference # */}
-                  <td className={dc} style={{ color: "var(--text-muted)" }}>{payDateRef}</td>
+                  <td className={dc} style={{ color: "var(--text-secondary)" }}>{payDateRef}</td>
                   {/* AD: Due Date */}
-                  <td className={dc} style={{ color: "var(--text-muted)" }}>{data.payDate}</td>
+                  <td className={dc} style={{ color: "var(--text-secondary)" }}>{data.payDate}</td>
                   {/* AE: Approval Status */}
-                  <td className={dc} style={{ color: "var(--text-muted)" }}>Approved</td>
+                  <td className={dc} style={{ color: "var(--text-secondary)" }}>Approved</td>
                   {/* AF: Pay Period */}
-                  <td className={dc} style={{ color: "var(--text-muted)" }}>{data.payPeriod}</td>
+                  <td className={dc} style={{ color: "var(--text-secondary)" }}>{data.payPeriod}</td>
                 </tr>
               );
             })}
             {/* ── Footer Row 1: TOTAL PAYROLL ── */}
             <tr style={{ borderTop: "2px solid var(--border-color)" }}>
               <td className={dc} colSpan={24}></td>
-              <td className={`${dc} text-right font-medium`} style={{ color: "var(--text-secondary)" }}>TOTAL PAYROLL:</td>
-              <td className={`${dc} text-right font-medium`} style={{ color: "#4ade80" }}>{fmt(totalPayroll)}</td>
+              <td className={`${dc} text-right font-semibold`} style={{ color: "var(--text-primary)" }}>TOTAL PAYROLL:</td>
+              <td className={`${dc} text-right font-semibold`} style={{ color: "#4ade80" }}>{fmt(totalPayroll)}</td>
               <td className={dc} colSpan={6}></td>
             </tr>
             {/* ── Footer Row 2: TOTAL EMP. W/DRAWL ── */}
             <tr>
               <td className={dc} colSpan={2}></td>
-              <td className={dc} style={{ color: "var(--text-muted)" }}>Pay Period:</td>
-              <td className={dc} style={{ color: "var(--text-muted)" }}>{data.payPeriod}</td>
+              <td className={dc} style={{ color: "var(--text-secondary)" }}>Pay Period:</td>
+              <td className={dc} style={{ color: "var(--text-secondary)" }}>{data.payPeriod}</td>
               <td className={dc} colSpan={20}></td>
-              <td className={`${dc} text-right font-medium`} style={{ color: "var(--text-secondary)" }}>TOTAL EMP. W/DRAWL:</td>
-              <td className={`${dc} text-right`} style={{ color: "var(--text-muted)", background: manualBg }}></td>
+              <td className={`${dc} text-right font-semibold`} style={{ color: "var(--text-primary)" }}>TOTAL EMP. W/DRAWL:</td>
+              <td className={`${dc} text-right`} style={{ color: "var(--text-secondary)", background: manualBg }}></td>
               <td className={dc} colSpan={6}></td>
             </tr>
             {/* ── Footer Row 3: TOTAL ACH ── */}
             <tr>
               <td className={dc} colSpan={2}></td>
-              <td className={dc} style={{ color: "var(--text-muted)" }}>Pay Date:</td>
-              <td className={dc} style={{ color: "var(--text-muted)" }}>{data.payDate}</td>
+              <td className={dc} style={{ color: "var(--text-secondary)" }}>Pay Date:</td>
+              <td className={dc} style={{ color: "var(--text-secondary)" }}>{data.payDate}</td>
               <td className={dc} colSpan={20}></td>
-              <td className={`${dc} text-right font-medium`} style={{ color: "var(--text-secondary)" }}>TOTAL ACH:</td>
-              <td className={`${dc} text-right font-medium`} style={{ color: "#4ade80" }}>{fmt(totalPayroll)}</td>
+              <td className={`${dc} text-right font-semibold`} style={{ color: "var(--text-primary)" }}>TOTAL ACH:</td>
+              <td className={`${dc} text-right font-semibold`} style={{ color: "#4ade80" }}>{fmt(totalPayroll)}</td>
               <td className={dc} colSpan={6}></td>
             </tr>
           </tbody>
@@ -1486,8 +1490,8 @@ function BranchResults({
 
       {/* Legend */}
       <div
-        className="mt-4 p-3 rounded-lg text-xs font-sans"
-        style={{ background: "var(--card-bg)", color: "var(--text-muted)" }}
+        className="mt-4 p-4 rounded-lg text-sm font-sans"
+        style={{ background: "var(--card-bg)", color: "var(--text-secondary)" }}
       >
         <span>
           Click any data cell to edit. <strong style={{ color: "var(--gold)" }}>Gold-highlighted cells</strong> have been modified from computed values.
@@ -1554,13 +1558,13 @@ function PastRuns({ branchId, branches }: { branchId: string; branches: BranchCo
     >
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center justify-between px-4 py-3 text-xs font-sans tracking-wide"
-        style={{ color: "var(--text-secondary)" }}
+        className="w-full flex items-center justify-between px-4 py-3 text-sm font-sans tracking-wide"
+        style={{ color: "var(--text-primary)" }}
       >
-        <span className="font-medium">
+        <span className="font-semibold">
           Past Runs {!loading && `(${runs.length})`}
         </span>
-        <span style={{ color: "var(--text-muted)" }}>
+        <span style={{ color: "var(--text-secondary)" }}>
           {expanded ? "▲" : "▼"}
         </span>
       </button>
@@ -1582,8 +1586,8 @@ function PastRuns({ branchId, branches }: { branchId: string; branches: BranchCo
             <>
               <div className="mb-3 flex items-center gap-2">
                 <label
-                  className="text-[10px] font-sans tracking-[1.5px] uppercase"
-                  style={{ color: "var(--text-muted)" }}
+                  className="text-xs font-sans font-medium tracking-[1.5px] uppercase"
+                  style={{ color: "var(--text-secondary)" }}
                 >
                   Filter by date
                 </label>
@@ -1591,7 +1595,7 @@ function PastRuns({ branchId, branches }: { branchId: string; branches: BranchCo
                   type="date"
                   value={filterDate}
                   onChange={(e) => setFilterDate(e.target.value)}
-                  className="px-2 py-1 rounded border text-xs font-sans"
+                  className="px-3 py-1.5 rounded border text-sm font-sans"
                   style={{
                     background: "var(--input-bg)",
                     borderColor: "var(--border-light)",
@@ -1601,8 +1605,8 @@ function PastRuns({ branchId, branches }: { branchId: string; branches: BranchCo
                 {filterDate && (
                   <button
                     onClick={() => setFilterDate("")}
-                    className="text-xs font-sans"
-                    style={{ color: "var(--text-muted)" }}
+                    className="text-sm font-sans"
+                    style={{ color: "var(--text-secondary)" }}
                   >
                     Clear
                   </button>
@@ -1616,14 +1620,14 @@ function PastRuns({ branchId, branches }: { branchId: string; branches: BranchCo
                     className="flex items-center justify-between px-3 py-2 rounded-md border"
                     style={{ borderColor: "var(--border-light)" }}
                   >
-                    <div className="flex items-center gap-4 text-xs font-sans">
+                    <div className="flex items-center gap-4 text-sm font-sans">
                       <span style={{ color: "var(--text-primary)" }}>{run.displayPeriod}</span>
-                      <span style={{ color: "var(--text-muted)" }}>Pay: {run.displayPayDate}</span>
-                      <span style={{ color: "var(--text-muted)" }}>Run: {run.displayRunDate}</span>
+                      <span style={{ color: "var(--text-secondary)" }}>Pay: {run.displayPayDate}</span>
+                      <span style={{ color: "var(--text-secondary)" }}>Run: {run.displayRunDate}</span>
                     </div>
                     <button
                       onClick={() => downloadRun(run)}
-                      className="px-3 py-1 rounded text-[10px] font-sans font-medium tracking-wide transition-all"
+                      className="px-3 py-1.5 rounded text-xs font-sans font-medium tracking-wide transition-all"
                       style={{
                         border: "1px solid var(--gold)",
                         color: "var(--gold)",

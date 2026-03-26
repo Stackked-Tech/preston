@@ -25,7 +25,6 @@ No test framework is configured.
 6. **Employee Admin** (`/employee-admin`) — Staff configuration management for payroll (names, NetSuite IDs, station leases, fees) across all WHB salon branches, backed by Supabase
 7. **Employee Portal** (`/employee`) — Employee-facing portal with Supabase Auth login, placeholder onboarding, and read-only fee dashboard
 8. **Hospitality Management** (`/hospitality`) — QR-code-driven maintenance request pipeline with tenant submission, manager approval workflow, maintenance staff task board (PWA), recurring task scheduling, and admin configuration. Features SMS notifications via Twilio and Spanish translation via Claude Haiku 4.5.
-9. **Construction Scheduler** (`/scheduler`) — Construction project scheduling with interactive Gantt chart, cascading task dependencies, subcontractor notifications via Twilio SMS + Resend email, magic-link sub portal with task acknowledgment, phase management, schedule templates with auto-assign by trade, cross-project sub workload view, and notification review flow.
 
 ## Tech Stack
 
@@ -61,8 +60,6 @@ No test framework is configured.
 /hospitality/request/[propertyId]   → Public tenant request form (QR code target)
 /hospitality/tasks                  → Maintenance staff task board (custom user login)
 /hospitality/admin                  → Admin panel (password gated)
-/scheduler                          → Construction scheduling dashboard (password gated)
-/scheduler/sub/[token]              → Public sub portal (magic link, read-only)
 ```
 
 ### Data Layer
@@ -77,7 +74,6 @@ Most database access is **client-side via Supabase SDK**. Each micro-app has its
 - `src/lib/employeeAuthHooks.ts` — Employee Portal (`useEmployeeAuth`)
 - `src/lib/employeePortalHooks.ts` — Employee Portal (`useEmployeeFees`)
 - `src/lib/hospitalityHooks.ts` — Hospitality Management (`useProperties`, `useRequesterTypes`, `useCategories`, `useHMUsers`, `useUserProperties`, `usePropertyByQrCode`, `useRequests`, `useSubmitRequest`, `useReviewRequest`, `useTasks`, `useTaskDetail`, `useTaskActions`, `useRecurringTasks`)
-- `src/lib/schedulerHooks.ts` — Construction Scheduler (`useProjects`, `usePhases`, `useTasks`, `useSubs`, `useSubTokens`, `useNotifications`, `useTemplates`, `useSubPortalTasks`, `cascadeTasks`)
 
 **Exception — Payout Suite:** Uses a server-side API route (`src/app/api/phorest/payroll/route.ts`) that calls the Phorest API, transforms CSV data, generates XLSX, and uploads to Supabase Storage.
 
@@ -99,10 +95,6 @@ Most database access is **client-side via Supabase SDK**. Each micro-app has its
 - `src/app/api/hospitality/auth/route.ts` — User login and password management (bcrypt)
 - `src/app/api/hospitality/recurring/route.ts` — Cron endpoint for recurring task generation
 
-**Exception — Construction Scheduler:** Uses server-side API routes:
-- `src/app/api/scheduler/notify/route.ts` — Send schedule change SMS (Twilio) + email (Resend) to subs, batched per sub
-- `src/app/api/scheduler/acknowledge/route.ts` — Sub portal task acknowledgment (token-verified)
-
 Payout Suite key libs:
 - `src/lib/payrollTransform.ts` — Phorest CSV → per-staff payroll data
 - `src/lib/payrollExcel.ts` — XLSX generation for NetSuite import
@@ -110,11 +102,15 @@ Payout Suite key libs:
 - `src/lib/colorChargesParser.ts` — Color stylist report CSV parser
 - `src/lib/phorestClient.ts` — Phorest API client (CSV export jobs)
 - `src/lib/phorestLookerClient.ts` — Phorest Looker integration for authoritative "Paid to Salon" tips via OAuth → SSO → Looker query
+- `.github/scripts/fetch-looker-tips.mjs` — Standalone Looker tips fetcher (runs in GitHub Actions, not Vercel)
+- `.github/workflows/fetch-looker-tips.yml` — workflow_dispatch trigger for tips fetch
+- `src/app/api/phorest/fetch-tips/route.ts` — Triggers GitHub Action via GITHUB_PAT
+- `supabase-looker-tips-schema.sql` — `ps_looker_tips` cache table
 - `Salon Exports/MAPPING-DOCUMENTATION.md` — Column-by-column mapping spec
 
 ### Type Definitions (`src/types/`)
 
-Separate type files per domain: `database.ts` (Brain Dump), `timeclock.ts`, `signedtosealed.ts`, `paramount.ts`, `employeeadmin.ts`, `employeeportal.ts`, `hospitality.ts`, `scheduler.ts`. Insert/Update types are derived from main types using `Omit`.
+Separate type files per domain: `database.ts` (Brain Dump), `timeclock.ts`, `signedtosealed.ts`, `paramount.ts`, `employeeadmin.ts`, `employeeportal.ts`, `hospitality.ts`. Insert/Update types are derived from main types using `Omit`.
 
 ### Component Structure
 
@@ -127,8 +123,6 @@ Large feature components live in `src/components/`. Brain Dump, Time Clock, and 
 - `BulkMessageModal.tsx` — Multi-select with tag quick-select, SMS segment counter
 - `BroadcastHistory.tsx` — Expandable broadcast list with per-recipient delivery status
 - `MessageSearch.tsx` — Cmd+K search overlay with highlighted results
-
-Construction Scheduler uses 12 components in `src/components/scheduler/`: `SchedulerDashboard.tsx` (orchestrator), `ProjectList.tsx`, `ProjectDetail.tsx`, `GanttChart.tsx` (custom CSS grid Gantt with dependency arrows), `TaskEditor.tsx`, `PhaseManager.tsx`, `SubDirectory.tsx`, `SubPortal.tsx` (magic link view with task acknowledgment), `TemplateManager.tsx`, `NotificationLog.tsx`, `NotificationReview.tsx` (confirm before sending SMS/email), `SubWorkload.tsx` (cross-project sub timeline).
 
 Hospitality Management uses 18 components in `src/components/hospitality/`: `RequestForm.tsx` (public tenant form), `ManagerDashboard.tsx` (orchestrator), `RequestQueue.tsx`, `RequestReviewCard.tsx`, `ApprovalModal.tsx`, `RejectionModal.tsx`, `TaskBoard.tsx` (PWA orchestrator), `TaskList.tsx`, `TaskDetail.tsx`, `TaskStatusBar.tsx`, `TranslateButton.tsx`, `HospitalityAdmin.tsx` (admin orchestrator), `PropertyManager.tsx`, `UserManager.tsx`, `CategoryManager.tsx`, `RequesterTypeManager.tsx`, `RecurringTaskManager.tsx`, `StatsDashboard.tsx`.
 
@@ -164,10 +158,10 @@ Schema files at project root:
 - `supabase-sts-templates-migration.sql` — Migration for template documents/fields tables + fill_mode/label columns on sts_fields
 - `supabase-paramount-schema.sql` — Paramount Communications tables (`pc_contacts`, `pc_messages`, `pc_broadcasts`, `pc_broadcast_recipients`, `pc_scheduled_messages`)
 - `supabase-employeeadmin-schema.sql` — Employee Admin tables (`ea_branches`, `ea_staff`, `ea_name_overrides`)
+- `supabase-looker-tips-schema.sql` — Payout Suite tips cache (`ps_looker_tips`)
 - `supabase-hospitality-schema.sql` — Hospitality Management tables (`hm_properties`, `hm_requester_types`, `hm_categories`, `hm_users`, `hm_user_properties`, `hm_requests`, `hm_request_photos`, `hm_tasks`, `hm_task_notes`, `hm_task_photos`, `hm_task_time_logs`, `hm_task_materials`, `hm_recurring_tasks`)
-- `supabase-scheduler-schema.sql` — Construction Scheduler tables (`cs_projects`, `cs_phases`, `cs_tasks`, `cs_subs`, `cs_sub_tokens`, `cs_notifications`, `cs_templates`, `cs_template_phases`, `cs_template_tasks`)
 
-Time Clock tables use `tc_` prefix. Signed to Sealed tables use `sts_` prefix. Paramount Communications tables use `pc_` prefix. Employee Admin tables use `ea_` prefix. Hospitality Management tables use `hm_` prefix. Construction Scheduler tables use `cs_` prefix.
+Time Clock tables use `tc_` prefix. Signed to Sealed tables use `sts_` prefix. Paramount Communications tables use `pc_` prefix. Employee Admin tables use `ea_` prefix. Hospitality Management tables use `hm_` prefix.
 
 ## Environment Variables
 
@@ -188,7 +182,7 @@ TWILIO_HM_PHONE_NUMBER=<+1XXXXXXXXXX>          # Hospitality (dedicated Twilio n
 PHOREST_USER_EMAIL=<phorest-user-email>            # Payout Suite (Looker tips)
 PHOREST_USER_PASSWORD=<phorest-user-password>      # Payout Suite (Looker tips)
 PHOREST_BUSINESS_ID_INTERNAL=<business-id>         # Payout Suite (Looker tips, internal Phorest business ID)
-TWILIO_CS_PHONE_NUMBER=<+1XXXXXXXXXX>              # Construction Scheduler (optional dedicated Twilio number, falls back to TWILIO_PHONE_NUMBER)
+GITHUB_PAT=<github-personal-access-token>          # Payout Suite (triggers GitHub Action for tips fetch)
 ```
 
 The Supabase client (`src/lib/supabase.ts`) creates a placeholder if env vars are missing — the app builds but shows error states at runtime.
@@ -208,13 +202,14 @@ curl -s -X POST "https://api.supabase.com/v1/projects/sfftouuzdrxfwcqqjjpm/datab
 ### Payout Suite — Payroll Business Rules
 
 Key rules discovered through comparison with Rachel's NetSuite templates:
-- **Tips:** Sourced from Phorest Looker "Paid to Salon" column (not CSV `phorest_tips` or `staff_tips` — those don't carry the salon/staff routing). Falls back to GC-payment-type filter from CSV if Looker unavailable.
+- **Tips:** Sourced from Phorest Looker "Paid to Salon" via GitHub Action → `ps_looker_tips` Supabase cache. Payroll auto-triggers the Action and polls for up to 90s when no cache exists. Looker names may have trailing/double spaces — normalized before matching. Falls back to live Looker (local dev only) or manual entry if GITHUB_PAT not set.
+- **Finders Fee:** All stylists who serve a new guest get credited for their own services (not single-winner dedup).
 - **Product Sales:** Include Employee Sale (ES) products — they appear in both product sales (for booth rent rebate) AND employee purchases (as deduction). Negative product totals (voids/returns) are floored to $0.
 - **Service Totals:** Always go to contractor service column (Col K), even for associates. Associate pay column (Col L) is for manually-entered hourly wages from time cards only.
 - **Employee Purchases:** Negated in output (they're deductions). Matched by client name → staff via `ea_name_overrides` table.
 - **Staff Name Matching:** Phorest CSV includes middle initials in `staff_first_name` (e.g., "Dustin G" not "Dustin"). `createStaffNameResolver()` handles fuzzy first+last matching.
 - **All-Zero Filter:** Staff with no transaction data are dropped unless they have configured fees (station lease, financial services, phorest, refreshment) or are associates.
-- **New Guest / Finders Fee:** Shared-client dedup is manual (Rachel assigns credit) — automated tie-breaking uses earliest timestamp + alphabetical.
+- **New Guest / Finders Fee:** All stylists who serve a new guest get credited for their own services. Shared-client dedup for the same guest is manual (Rachel assigns credit).
 
 ## Conventions
 
