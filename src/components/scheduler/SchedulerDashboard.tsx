@@ -19,6 +19,7 @@ import ProjectDetail from "./ProjectDetail";
 import SubDirectory from "./SubDirectory";
 import NotificationLog from "./NotificationLog";
 import TemplateManager from "./TemplateManager";
+import SubWorkload from "./SubWorkload";
 
 type ViewTab = "schedule" | "subs" | "templates" | "notifications";
 
@@ -29,6 +30,7 @@ export default function SchedulerDashboard() {
   const [showSubsModal, setShowSubsModal] = useState(false);
   const [showNotificationsModal, setShowNotificationsModal] = useState(false);
   const [showTemplatesModal, setShowTemplatesModal] = useState(false);
+  const [showWorkload, setShowWorkload] = useState(false);
 
   // Data hooks
   const { projects, createProject, updateProject, deleteProject } = useProjects();
@@ -191,6 +193,7 @@ export default function SchedulerDashboard() {
           <div className="flex rounded-lg border overflow-hidden" style={{ borderColor: "var(--border-light)" }}>
             {([
               { key: "schedule", label: "Schedule", icon: "📅" },
+              { key: "workload", label: "Workload", icon: "📊" },
               { key: "subs", label: "Subs", icon: "👷" },
               { key: "templates", label: "Templates", icon: "📋" },
               { key: "notifications", label: "Alerts", icon: "🔔" },
@@ -198,7 +201,8 @@ export default function SchedulerDashboard() {
               <button
                 key={key}
                 onClick={() => {
-                  if (key === "subs") setShowSubsModal(true);
+                  if (key === "workload") setShowWorkload(true);
+                  else if (key === "subs") setShowSubsModal(true);
                   else if (key === "templates") setShowTemplatesModal(true);
                   else if (key === "notifications") setShowNotificationsModal(true);
                   else setActiveTab(key);
@@ -301,6 +305,14 @@ export default function SchedulerDashboard() {
           notifications={notifications}
           subs={subs}
           onClose={() => setShowNotificationsModal(false)}
+        />
+      )}
+
+      {showWorkload && (
+        <SubWorkload
+          subs={subs}
+          onClose={() => setShowWorkload(false)}
+          onNavigateToProject={(projectId) => { setSelectedProjectId(projectId); setShowWorkload(false); }}
         />
       )}
 

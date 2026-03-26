@@ -39,6 +39,7 @@ export interface CSTask {
   status: "pending" | "in_progress" | "completed" | "delayed";
   notes: string | null;
   sort_order: number;
+  acknowledged_at: string | null;
   created_at: string;
   updated_at: string;
 }

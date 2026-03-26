@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import Image from "next/image";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { useSubPortalTasks } from "@/lib/schedulerHooks";
@@ -34,7 +34,11 @@ export default function SubPortal({ token }: SubPortalProps) {
     loadSub();
   }, [token]);
 
-  const { tasks, loading: tasksLoading } = useSubPortalTasks(sub?.id || null);
+  const { tasks, loading: tasksLoading, fetchTasks } = useSubPortalTasks(sub?.id || null);
+
+  const handleAcknowledge = useCallback((taskId: string) => {
+    fetchTasks();
+  }, [fetchTasks]);
 
   if (loading) {
     return (
@@ -119,7 +123,7 @@ export default function SubPortal({ token }: SubPortalProps) {
             </div>
             <div className="space-y-3">
               {currentTasks.map((task) => (
-                <TaskCard key={task.id} task={task} highlight />
+                <TaskCard key={task.id} task={task} highlight token={token} onAcknowledge={handleAcknowledge} />
               ))}
             </div>
           </div>
@@ -147,7 +151,7 @@ export default function SubPortal({ token }: SubPortalProps) {
           ) : (
             <div className="space-y-3">
               {tasks.map((task) => (
-                <TaskCard key={task.id} task={task} />
+                <TaskCard key={task.id} task={task} token={token} onAcknowledge={handleAcknowledge} />
               ))}
             </div>
           )}
@@ -171,10 +175,14 @@ export default function SubPortal({ token }: SubPortalProps) {
 
 // ─── Task card component ─────────────────────────────
 
-function TaskCard({ task, highlight }: {
-  task: { id: string; name: string; start_date: string; end_date: string; duration_days: number; status: string; notes: string | null; project_name: string; project_address: string };
+function TaskCard({ task, highlight, token, onAcknowledge }: {
+  task: { id: string; name: string; start_date: string; end_date: string; duration_days: number; status: string; notes: string | null; project_name: string; project_address: string; acknowledged_at?: string | null };
   highlight?: boolean;
+  token: string;
+  onAcknowledge: (taskId: string) => void;
 }) {
+  const [acking, setAcking] = useState(false);
+  const isAcked = !!task.acknowledged_at;
   const statusConfig: Record<string, { bg: string; text: string; label: string }> = {
     pending: { bg: "rgba(107, 114, 128, 0.12)", text: "#9ca3af", label: "Pending" },
     in_progress: { bg: "rgba(59, 130, 246, 0.12)", text: "#3b82f6", label: "In Progress" },
@@ -232,6 +240,45 @@ function TaskCard({ task, highlight }: {
           {task.notes}
         </p>
       )}
+
+      {/* Acknowledge button */}
+      <div className="mt-4 pt-3 border-t" style={{ borderColor: "#1a1a1a" }}>
+        {isAcked ? (
+          <div className="flex items-center gap-2">
+            <span className="text-xs" style={{ color: "#22c55e" }}>✓</span>
+            <span className="text-xs font-sans" style={{ color: "#22c55e" }}>
+              Acknowledged {new Date(task.acknowledged_at!).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+            </span>
+          </div>
+        ) : (
+          <button
+            onClick={async () => {
+              setAcking(true);
+              try {
+                const res = await fetch("/api/scheduler/acknowledge", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ taskId: task.id, subToken: token }),
+                });
+                if (res.ok) onAcknowledge(task.id);
+              } catch (err) {
+                console.error("Acknowledge failed:", err);
+              } finally {
+                setAcking(false);
+              }
+            }}
+            disabled={acking}
+            className="w-full py-2 rounded-lg text-xs font-sans font-semibold uppercase tracking-wider transition-all duration-200"
+            style={{
+              background: acking ? "#1a1a1a" : "rgba(212, 175, 55, 0.12)",
+              color: "#d4af37",
+              border: "1px solid rgba(212, 175, 55, 0.2)",
+            }}
+          >
+            {acking ? "Acknowledging..." : "✓ Acknowledge Schedule"}
+          </button>
+        )}
+      </div>
     </div>
   );
 }

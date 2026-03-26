@@ -447,8 +447,15 @@ export function useTemplates() {
     async (templateId: string, projectId: string, startDate: string) => {
       const { phases, tasks } = await getTemplateDetail(templateId);
 
+      // Fetch subs for auto-assignment by trade
+      const { data: allSubs } = await supabase.from("cs_subs").select("id, trade").order("name");
+      const subsByTrade = new Map<string, string>();
+      for (const s of (allSubs || [])) {
+        if (!subsByTrade.has(s.trade)) subsByTrade.set(s.trade, s.id);
+      }
+
       // Create phases
-      const phaseMap = new Map<string, string>(); // template phase id -> new phase id
+      const phaseMap = new Map<string, string>();
       for (const tp of phases) {
         const { data } = await supabase
           .from("cs_phases")
@@ -463,13 +470,15 @@ export function useTemplates() {
         if (data) phaseMap.set(tp.id, data.id);
       }
 
-      // Create tasks with calculated dates
-      const taskMap = new Map<number, string>(); // sort_order -> new task id
+      // Create tasks with calculated dates + auto-assign subs by trade
+      const taskMap = new Map<number, string>();
       for (const tt of tasks) {
         const taskStart = addBusinessDays(startDate, tt.offset_days);
         const taskEnd = addBusinessDays(taskStart, tt.duration_days - 1);
         const depId = tt.dependency_index != null ? taskMap.get(tt.dependency_index) || null : null;
         const phaseId = tt.template_phase_id ? phaseMap.get(tt.template_phase_id) || null : null;
+        // Auto-assign sub by trade
+        const autoSubId = tt.trade ? subsByTrade.get(tt.trade) || null : null;
 
         const { data } = await supabase
           .from("cs_tasks")
@@ -481,7 +490,7 @@ export function useTemplates() {
             end_date: taskEnd,
             duration_days: tt.duration_days,
             dependency_id: depId,
-            sub_id: null,
+            sub_id: autoSubId,
             status: "pending",
             notes: null,
             sort_order: tt.sort_order,
@@ -500,7 +509,7 @@ export function useTemplates() {
 // ─── Sub Portal (read-only tasks for a sub) ──────────
 
 export function useSubPortalTasks(subId: string | null) {
-  const [tasks, setTasks] = useState<(CSTask & { project_name: string; project_address: string })[]>([]);
+  const [tasks, setTasks] = useState<(CSTask & { project_name: string; project_address: string; acknowledged_at: string | null })[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchTasks = useCallback(async () => {

@@ -6,6 +6,7 @@ import { formatDateShort, cascadeTasks } from "@/lib/schedulerHooks";
 import GanttChart from "./GanttChart";
 import TaskEditor from "./TaskEditor";
 import PhaseManager from "./PhaseManager";
+import NotificationReview from "./NotificationReview";
 
 interface ProjectDetailProps {
   project: CSProject;
@@ -44,6 +45,7 @@ export default function ProjectDetail({
   const [showPhases, setShowPhases] = useState(false);
   const [editingStatus, setEditingStatus] = useState(false);
   const [view, setView] = useState<"gantt" | "list">("gantt");
+  const [pendingChanges, setPendingChanges] = useState<{ taskId: string; subId: string; taskName: string; oldStart: string; oldEnd: string; newStart: string; newEnd: string }[] | null>(null);
 
   // Task stats
   const stats = useMemo(() => {
@@ -85,7 +87,10 @@ export default function ProjectDetail({
               newStart: t.start_date, newEnd: t.end_date,
             };
           });
-        if (subChanges.length > 0) await onNotifySubs(subChanges);
+        // Show review modal instead of immediately notifying
+        if (subChanges.length > 0) {
+          setPendingChanges(subChanges);
+        }
       }
     },
     [tasks, onBulkUpdateTasks, onNotifySubs]
@@ -323,6 +328,11 @@ export default function ProjectDetail({
                           👷 {sub.name}
                         </span>
                       )}
+                      {task.acknowledged_at && (
+                        <span className="text-[10px] font-sans flex items-center gap-0.5" style={{ color: "#22c55e" }}>
+                          ✓ Acknowledged
+                        </span>
+                      )}
                       {task.dependency_id && (
                         <span className="text-[10px] font-sans" style={{ color: "var(--text-muted)", opacity: 0.6 }}>
                           🔗 Has dependency
@@ -366,6 +376,20 @@ export default function ProjectDetail({
           onUpdatePhase={onUpdatePhase}
           onDeletePhase={onDeletePhase}
           onClose={() => setShowPhases(false)}
+        />
+      )}
+
+      {pendingChanges && (
+        <NotificationReview
+          changes={pendingChanges}
+          subs={subs}
+          projectName={project.name}
+          onSend={async (selectedSubIds) => {
+            const filteredChanges = pendingChanges.filter((c) => selectedSubIds.includes(c.subId));
+            await onNotifySubs(filteredChanges);
+          }}
+          onSkip={() => setPendingChanges(null)}
+          onClose={() => setPendingChanges(null)}
         />
       )}
     </div>
