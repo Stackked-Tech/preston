@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback, useRef } from "react";
+import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { useDocumentUpload, useAuditLog } from "@/lib/signedToSealedHooks";
 import type { STSEnvelopeDetail, STSRecipient, STSField, SignatureMethod } from "@/types/signedtosealed";
@@ -32,6 +32,10 @@ export default function SigningView({ envelope, recipient, isPublic, onComplete 
   });
   const [submitting, setSubmitting] = useState(false);
   const [completed, setCompleted] = useState(false);
+
+  // Submit modal state
+  const [showSubmitModal, setShowSubmitModal] = useState(false);
+  const [submitModalDismissed, setSubmitModalDismissed] = useState(false);
 
   // ID upload state
   const requireIdUpload = envelope.require_id_upload ?? false;
@@ -99,6 +103,15 @@ export default function SigningView({ envelope, recipient, isPublic, onComplete 
 
   const currentDoc = envelope.documents[currentDocIndex];
   const currentDocUrl = currentDoc ? getPublicUrl(currentDoc.file_path) : null;
+
+  // Auto-show submit modal when all required fields are complete
+  const prevProgressRef = useRef(progress);
+  useEffect(() => {
+    if (progress === 100 && prevProgressRef.current < 100 && !submitModalDismissed && !completed) {
+      setShowSubmitModal(true);
+    }
+    prevProgressRef.current = progress;
+  }, [progress, submitModalDismissed, completed]);
 
   // Navigate to next empty required field
   const goToNextField = useCallback(() => {
@@ -326,85 +339,10 @@ export default function SigningView({ envelope, recipient, isPublic, onComplete 
         )}
       </div>
 
-      {/* ID Upload Section */}
-      {requireIdUpload && (
-        <div className="px-6 py-4 border-t space-y-3" style={{ borderColor: "var(--border-color)", background: "var(--bg-secondary)" }}>
-          <p className="text-xs font-medium tracking-[1px] uppercase" style={{ color: "var(--text-muted)" }}>
-            Required ID Documents
-          </p>
-
-          {/* ID Document 1 */}
-          <div className="flex items-center gap-3">
-            <input
-              ref={idInput1Ref}
-              type="file"
-              accept={ACCEPTED_ID_TYPES}
-              className="hidden"
-              onChange={(e) => { if (e.target.files?.[0]) handleIdFileSelect(e.target.files[0], 1); }}
-            />
-            <button
-              onClick={() => idInput1Ref.current?.click()}
-              disabled={idUploading}
-              className="flex-1 text-left px-4 py-3 rounded-lg border-2 border-dashed transition-all hover:opacity-80"
-              style={{
-                borderColor: idUploaded1 ? "#10b981" : "var(--border-color)",
-                background: idUploaded1 ? "#10b98110" : "var(--bg-primary)",
-              }}
-            >
-              <p className="text-xs font-medium" style={{ color: "var(--text-primary)" }}>
-                Upload ID Document 1 (e.g., Driver&apos;s License, Passport)
-              </p>
-              {idFile1 ? (
-                <p className="text-xs mt-1" style={{ color: idUploaded1 ? "#10b981" : "var(--text-muted)" }}>
-                  {idUploaded1 ? "✓" : "⏳"} {idFile1.name}
-                </p>
-              ) : (
-                <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
-                  Click to select file (JPG, PNG, HEIC, or PDF)
-                </p>
-              )}
-            </button>
-          </div>
-
-          {/* ID Document 2 */}
-          <div className="flex items-center gap-3">
-            <input
-              ref={idInput2Ref}
-              type="file"
-              accept={ACCEPTED_ID_TYPES}
-              className="hidden"
-              onChange={(e) => { if (e.target.files?.[0]) handleIdFileSelect(e.target.files[0], 2); }}
-            />
-            <button
-              onClick={() => idInput2Ref.current?.click()}
-              disabled={idUploading}
-              className="flex-1 text-left px-4 py-3 rounded-lg border-2 border-dashed transition-all hover:opacity-80"
-              style={{
-                borderColor: idUploaded2 ? "#10b981" : "var(--border-color)",
-                background: idUploaded2 ? "#10b98110" : "var(--bg-primary)",
-              }}
-            >
-              <p className="text-xs font-medium" style={{ color: "var(--text-primary)" }}>
-                Upload ID Document 2 (e.g., Social Security Card, Passport)
-              </p>
-              {idFile2 ? (
-                <p className="text-xs mt-1" style={{ color: idUploaded2 ? "#10b981" : "var(--text-muted)" }}>
-                  {idUploaded2 ? "✓" : "⏳"} {idFile2.name}
-                </p>
-              ) : (
-                <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
-                  Click to select file (JPG, PNG, HEIC, or PDF)
-                </p>
-              )}
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* Submit Bar */}
       <div
         className="flex items-center justify-between px-6 py-4 border-t"
-        style={{ borderColor: progress === 100 && idUploadsComplete ? "#10b981" : "var(--border-color)", background: "var(--bg-secondary)" }}
+        style={{ borderColor: "var(--border-color)", background: "var(--bg-secondary)" }}
       >
         <div>
           <p className="text-xs" style={{ color: "var(--text-muted)" }}>
@@ -416,20 +354,152 @@ export default function SigningView({ envelope, recipient, isPublic, onComplete 
             </p>
           )}
         </div>
-        <button
-          onClick={handleSubmit}
-          disabled={submitting || progress < 100 || !idUploadsComplete}
-          className="px-8 py-3 rounded-lg text-sm font-semibold transition-all hover:opacity-90 flex-shrink-0"
-          style={{
-            background: progress === 100 && idUploadsComplete ? "#10b981" : "var(--border-color)",
-            color: progress === 100 && idUploadsComplete ? "#fff" : "var(--text-muted)",
-            opacity: submitting ? 0.5 : 1,
-            boxShadow: progress === 100 && idUploadsComplete ? "0 0 20px #10b98140" : "none",
-          }}
-        >
-          {submitting ? "Submitting..." : progress === 100 && idUploadsComplete ? "Finish Signing" : progress < 100 ? "Complete All Fields to Sign" : "Upload Required ID Documents"}
-        </button>
+        {progress === 100 ? (
+          <button
+            onClick={() => setShowSubmitModal(true)}
+            className="px-8 py-3 rounded-lg text-sm font-semibold transition-all hover:opacity-90 flex-shrink-0"
+            style={{
+              background: "#10b981",
+              color: "#fff",
+              boxShadow: "0 0 20px #10b98140",
+            }}
+          >
+            Ready to Submit
+          </button>
+        ) : (
+          <button
+            disabled
+            className="px-8 py-3 rounded-lg text-sm font-semibold flex-shrink-0"
+            style={{
+              background: "var(--border-color)",
+              color: "var(--text-muted)",
+            }}
+          >
+            Complete All Fields to Sign
+          </button>
+        )}
       </div>
+
+      {/* Submit Modal */}
+      {showSubmitModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center"
+          style={{ background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)" }}
+        >
+          <div
+            className="w-full max-w-md mx-4 rounded-xl border shadow-2xl overflow-hidden"
+            style={{ background: "var(--bg-secondary)", borderColor: "var(--border-color)" }}
+          >
+            {/* Modal Header */}
+            <div className="px-6 pt-6 pb-4 text-center">
+              <span className="text-4xl block mb-3">
+                {requireIdUpload ? "📋" : "✅"}
+              </span>
+              <h3 className="text-lg font-semibold mb-1" style={{ color: "var(--text-primary)" }}>
+                {requireIdUpload && !idUploadsComplete
+                  ? "You're almost done!"
+                  : "You're all done!"}
+              </h3>
+              <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+                {requireIdUpload && !idUploadsComplete
+                  ? "Please upload 2 forms of valid ID to complete your signing."
+                  : "All fields have been completed. Click submit to finalize your signature."}
+              </p>
+            </div>
+
+            {/* ID Uploads (only if required) */}
+            {requireIdUpload && (
+              <div className="px-6 pb-4 space-y-3">
+                {/* ID Document 1 */}
+                <input
+                  ref={idInput1Ref}
+                  type="file"
+                  accept={ACCEPTED_ID_TYPES}
+                  className="hidden"
+                  onChange={(e) => { if (e.target.files?.[0]) handleIdFileSelect(e.target.files[0], 1); }}
+                />
+                <button
+                  onClick={() => idInput1Ref.current?.click()}
+                  disabled={idUploading}
+                  className="w-full text-left px-4 py-3 rounded-lg border-2 border-dashed transition-all hover:opacity-80"
+                  style={{
+                    borderColor: idUploaded1 ? "#10b981" : "var(--border-color)",
+                    background: idUploaded1 ? "#10b98110" : "var(--bg-primary)",
+                  }}
+                >
+                  <p className="text-xs font-medium" style={{ color: "var(--text-primary)" }}>
+                    ID Document 1 (e.g., Driver&apos;s License, Passport)
+                  </p>
+                  {idFile1 ? (
+                    <p className="text-xs mt-1" style={{ color: idUploaded1 ? "#10b981" : "var(--gold)" }}>
+                      {idUploaded1 ? "✓ Uploaded:" : "⏳ Uploading:"} {idFile1.name}
+                    </p>
+                  ) : (
+                    <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
+                      Click to select file (JPG, PNG, HEIC, or PDF)
+                    </p>
+                  )}
+                </button>
+
+                {/* ID Document 2 */}
+                <input
+                  ref={idInput2Ref}
+                  type="file"
+                  accept={ACCEPTED_ID_TYPES}
+                  className="hidden"
+                  onChange={(e) => { if (e.target.files?.[0]) handleIdFileSelect(e.target.files[0], 2); }}
+                />
+                <button
+                  onClick={() => idInput2Ref.current?.click()}
+                  disabled={idUploading}
+                  className="w-full text-left px-4 py-3 rounded-lg border-2 border-dashed transition-all hover:opacity-80"
+                  style={{
+                    borderColor: idUploaded2 ? "#10b981" : "var(--border-color)",
+                    background: idUploaded2 ? "#10b98110" : "var(--bg-primary)",
+                  }}
+                >
+                  <p className="text-xs font-medium" style={{ color: "var(--text-primary)" }}>
+                    ID Document 2 (e.g., Social Security Card, Passport)
+                  </p>
+                  {idFile2 ? (
+                    <p className="text-xs mt-1" style={{ color: idUploaded2 ? "#10b981" : "var(--gold)" }}>
+                      {idUploaded2 ? "✓ Uploaded:" : "⏳ Uploading:"} {idFile2.name}
+                    </p>
+                  ) : (
+                    <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
+                      Click to select file (JPG, PNG, HEIC, or PDF)
+                    </p>
+                  )}
+                </button>
+              </div>
+            )}
+
+            {/* Modal Footer */}
+            <div className="px-6 pb-6 flex gap-3">
+              <button
+                onClick={() => { setShowSubmitModal(false); setSubmitModalDismissed(true); }}
+                className="flex-1 px-4 py-3 rounded-lg text-sm border transition-all hover:opacity-80"
+                style={{ borderColor: "var(--border-color)", color: "var(--text-muted)" }}
+              >
+                Go Back
+              </button>
+              <button
+                onClick={() => { setShowSubmitModal(false); handleSubmit(); }}
+                disabled={submitting || !idUploadsComplete}
+                className="flex-1 px-4 py-3 rounded-lg text-sm font-semibold transition-all hover:opacity-90"
+                style={{
+                  background: idUploadsComplete ? "#10b981" : "var(--border-color)",
+                  color: idUploadsComplete ? "#fff" : "var(--text-muted)",
+                  opacity: submitting ? 0.5 : 1,
+                  boxShadow: idUploadsComplete ? "0 0 20px #10b98140" : "none",
+                }}
+              >
+                {submitting ? "Submitting..." : "Submit Signature"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Signature Modal */}
       <SignatureModal
