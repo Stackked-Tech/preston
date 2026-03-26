@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useMemo, useCallback } from "react";
+import { useState, useRef, useMemo, useCallback, useEffect } from "react";
 import type { CSTask, CSSub, CSPhase } from "@/types/scheduler";
 import { formatDateShort, daysBetween } from "@/lib/schedulerHooks";
 
@@ -21,8 +21,20 @@ const STATUS_COLORS: Record<string, { base: string; light: string }> = {
 
 export default function GanttChart({ tasks, phases, subs, onTaskClick, onTaskDrag }: GanttChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [dragging, setDragging] = useState<{ taskId: string; startX: number; origStart: string; origEnd: string; currentShift: number } | null>(null);
   const [hoverTaskId, setHoverTaskId] = useState<string | null>(null);
+
+  // ─── Ref-based drag system for 60fps smoothness ───
+  const dragRef = useRef<{
+    taskId: string;
+    startX: number;
+    origStart: string;
+    origEnd: string;
+    element: HTMLElement | null;
+    ghostLabel: HTMLElement | null;
+    dayShift: number;
+    isDragging: boolean;
+  } | null>(null);
+  const [dragTaskId, setDragTaskId] = useState<string | null>(null); // only for re-render triggers
 
   // Calculate date range
   const { minDate, maxDate, totalDays, dayWidth } = useMemo(() => {
@@ -142,49 +154,118 @@ export default function GanttChart({ tasks, phases, subs, onTaskClick, onTaskDra
     [minDate, dayWidth]
   );
 
-  // Drag handlers
+  // ─── Drag handlers (DOM-based for smooth 60fps) ───
   const handleMouseDown = useCallback(
     (e: React.MouseEvent, task: CSTask) => {
       e.preventDefault();
       e.stopPropagation();
-      setDragging({ taskId: task.id, startX: e.clientX, origStart: task.start_date, origEnd: task.end_date, currentShift: 0 });
+      const el = e.currentTarget as HTMLElement;
+
+      // Create a floating date label
+      const ghost = document.createElement("div");
+      ghost.style.cssText = "position:fixed;pointer-events:none;z-index:9999;padding:4px 10px;border-radius:8px;font-size:11px;font-family:sans-serif;font-weight:600;background:#d4af37;color:#000;box-shadow:0 4px 12px rgba(0,0,0,0.3);white-space:nowrap;transition:none;";
+      ghost.textContent = `${formatDateShort(task.start_date)} – ${formatDateShort(task.end_date)}`;
+      ghost.style.left = `${e.clientX + 12}px`;
+      ghost.style.top = `${e.clientY - 30}px`;
+      document.body.appendChild(ghost);
+
+      dragRef.current = {
+        taskId: task.id,
+        startX: e.clientX,
+        origStart: task.start_date,
+        origEnd: task.end_date,
+        element: el,
+        ghostLabel: ghost,
+        dayShift: 0,
+        isDragging: true,
+      };
+      setDragTaskId(task.id);
+
+      // Style the dragged element
+      el.style.transition = "none";
+      el.style.opacity = "0.9";
+      el.style.zIndex = "20";
+      el.style.boxShadow = "0 8px 24px rgba(0,0,0,0.3), 0 0 0 2px #d4af37";
+      el.style.cursor = "grabbing";
+      document.body.style.cursor = "grabbing";
     },
     []
   );
 
-  const handleMouseMove = useCallback(
-    (e: React.MouseEvent) => {
-      if (!dragging) return;
-      const dx = e.clientX - dragging.startX;
-      const dayShift = Math.round(dx / dayWidth);
-      if (dayShift !== dragging.currentShift) {
-        setDragging({ ...dragging, currentShift: dayShift });
-      }
-    },
-    [dragging, dayWidth]
-  );
+  // Global mouse handlers via useEffect for smooth tracking
+  useEffect(() => {
+    const handleGlobalMouseMove = (e: MouseEvent) => {
+      const drag = dragRef.current;
+      if (!drag || !drag.isDragging || !drag.element) return;
 
-  const handleMouseUp = useCallback(
-    (e: React.MouseEvent) => {
-      if (!dragging) return;
-      const dx = e.clientX - dragging.startX;
+      const dx = e.clientX - drag.startX;
+      const pixelShift = dx; // continuous pixel movement, not snapped
       const dayShift = Math.round(dx / dayWidth);
 
-      if (dayShift !== 0) {
-        const newStart = new Date(dragging.origStart + "T12:00:00");
+      // Move the bar in real-time (pixel-perfect, no snapping during drag)
+      drag.element.style.transform = `translateX(${pixelShift}px)`;
+      drag.dayShift = dayShift;
+
+      // Update the floating label with new dates
+      if (drag.ghostLabel) {
+        const newStart = new Date(drag.origStart + "T12:00:00");
         newStart.setDate(newStart.getDate() + dayShift);
-        const newEnd = new Date(dragging.origEnd + "T12:00:00");
+        const newEnd = new Date(drag.origEnd + "T12:00:00");
+        newEnd.setDate(newEnd.getDate() + dayShift);
+        drag.ghostLabel.textContent = `${formatDateShort(newStart.toISOString().split("T")[0])} – ${formatDateShort(newEnd.toISOString().split("T")[0])}`;
+        drag.ghostLabel.style.left = `${e.clientX + 12}px`;
+        drag.ghostLabel.style.top = `${e.clientY - 30}px`;
+
+        // Color the label red if moving backward, green if forward
+        if (dayShift < 0) drag.ghostLabel.style.background = "#ef4444";
+        else if (dayShift > 0) drag.ghostLabel.style.background = "#22c55e";
+        else drag.ghostLabel.style.background = "#d4af37";
+        drag.ghostLabel.style.color = "#fff";
+      }
+    };
+
+    const handleGlobalMouseUp = (e: MouseEvent) => {
+      const drag = dragRef.current;
+      if (!drag || !drag.isDragging) return;
+
+      // Clean up
+      if (drag.element) {
+        drag.element.style.transition = "";
+        drag.element.style.transform = "";
+        drag.element.style.opacity = "";
+        drag.element.style.zIndex = "";
+        drag.element.style.boxShadow = "";
+        drag.element.style.cursor = "";
+      }
+      if (drag.ghostLabel) {
+        drag.ghostLabel.remove();
+      }
+      document.body.style.cursor = "";
+
+      const dayShift = drag.dayShift;
+      if (dayShift !== 0) {
+        const newStart = new Date(drag.origStart + "T12:00:00");
+        newStart.setDate(newStart.getDate() + dayShift);
+        const newEnd = new Date(drag.origEnd + "T12:00:00");
         newEnd.setDate(newEnd.getDate() + dayShift);
         onTaskDrag(
-          dragging.taskId,
+          drag.taskId,
           newStart.toISOString().split("T")[0],
           newEnd.toISOString().split("T")[0]
         );
       }
-      setDragging(null);
-    },
-    [dragging, dayWidth, onTaskDrag]
-  );
+
+      dragRef.current = null;
+      setDragTaskId(null);
+    };
+
+    window.addEventListener("mousemove", handleGlobalMouseMove);
+    window.addEventListener("mouseup", handleGlobalMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", handleGlobalMouseMove);
+      window.removeEventListener("mouseup", handleGlobalMouseUp);
+    };
+  }, [dayWidth, onTaskDrag]);
 
   // Dependency arrows
   const dependencyLines = useMemo(() => {
@@ -248,7 +329,7 @@ export default function GanttChart({ tasks, phases, subs, onTaskClick, onTaskDra
       className="border rounded-xl overflow-hidden"
       style={{ borderColor: "var(--border-color)", background: "var(--bg-primary)", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}
     >
-      <div className="flex overflow-x-auto" onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onMouseLeave={() => setDragging(null)}>
+      <div className="flex overflow-x-auto" style={{ userSelect: dragTaskId ? "none" : "auto" }}>
         {/* Labels column */}
         <div className="flex-shrink-0 border-r" style={{ width: labelWidth, borderColor: "var(--border-color)" }}>
           {/* Header */}
@@ -393,35 +474,34 @@ export default function GanttChart({ tasks, phases, subs, onTaskClick, onTaskDra
               if (row.type !== "task" || !row.task) return null;
               const task = row.task;
               const pos = getTaskPosition(task);
-              const isDraggingThis = dragging?.taskId === task.id;
+              const isDraggingThis = dragTaskId === task.id;
               const isHovered = hoverTaskId === task.id;
               const colors = STATUS_COLORS[task.status] || STATUS_COLORS.pending;
-
-              // Calculate drag offset for visual preview
-              const dragOffset = isDraggingThis ? (dragging.currentShift * dayWidth) : 0;
 
               return (
                 <div
                   key={task.id}
-                  className="absolute rounded-md cursor-pointer transition-all"
+                  className="absolute rounded-md cursor-grab active:cursor-grabbing"
+                  data-task-id={task.id}
                   style={{
-                    left: pos.left + dragOffset,
+                    left: pos.left,
                     top: row.index * rowHeight + 10,
                     width: pos.width,
                     height: rowHeight - 20,
                     background: `linear-gradient(135deg, ${colors.base}, ${colors.light})`,
-                    opacity: isDraggingThis ? 0.8 : 1,
-                    zIndex: isDraggingThis ? 10 : isHovered ? 6 : 4,
-                    boxShadow: isDraggingThis
-                      ? `0 6px 16px rgba(0,0,0,0.25), 0 0 0 2px ${colors.base}`
-                      : isHovered
+                    zIndex: isHovered ? 6 : 4,
+                    boxShadow: isHovered
                       ? `0 3px 10px rgba(0,0,0,0.15), 0 0 0 1px ${colors.base}40`
                       : `0 1px 3px rgba(0,0,0,0.1)`,
                     transform: isHovered && !isDraggingThis ? "translateY(-1px)" : "none",
+                    transition: isDraggingThis ? "none" : "transform 0.15s ease, box-shadow 0.15s ease",
                   }}
-                  onClick={() => onTaskClick(task)}
+                  onClick={(e) => {
+                    // Only trigger click if we didn't just drag
+                    if (!dragRef.current) onTaskClick(task);
+                  }}
                   onMouseDown={(e) => handleMouseDown(e, task)}
-                  onMouseEnter={() => setHoverTaskId(task.id)}
+                  onMouseEnter={() => !dragTaskId && setHoverTaskId(task.id)}
                   onMouseLeave={() => setHoverTaskId(null)}
                 >
                   <div className="h-full flex items-center px-2 overflow-hidden">
