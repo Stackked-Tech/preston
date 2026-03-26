@@ -118,9 +118,17 @@ export async function POST(request: NextRequest) {
           }
         );
         tipsActionTriggered = dispatchRes.ok;
-      } catch {
-        // Non-fatal — tips can be entered manually
+        if (!dispatchRes.ok) {
+          const body = await dispatchRes.text().catch(() => "");
+          console.error(`[Tips] GitHub Action dispatch failed: ${dispatchRes.status} — ${body}`);
+        } else {
+          console.log(`[Tips] GitHub Action dispatched for ${branchId} (${startDate} to ${endDate})`);
+        }
+      } catch (err) {
+        console.error("[Tips] GitHub Action dispatch error:", err instanceof Error ? err.message : err);
       }
+    } else if (!cachedTips && !ghToken) {
+      console.warn("[Tips] GITHUB_PAT not configured — cannot auto-trigger tips fetch");
     }
 
     // 1. Create CSV export job
@@ -239,7 +247,7 @@ export async function POST(request: NextRequest) {
       }
     } else {
       results.warnings.push(
-        "Tips fetch failed — enter tips manually."
+        "Tips auto-fetch failed (GitHub Action dispatch error). Click 'Fetch Tips from Phorest' to retry, or enter tips manually."
       );
     }
 

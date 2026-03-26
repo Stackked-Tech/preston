@@ -251,6 +251,9 @@ export default function PayoutSuite() {
   // ── Auto-poll for tips when branches are missing them ──
   const tipsPollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Track which branches we've already triggered a fetch-tips for (avoid re-dispatching)
+  const tipsTriggeredRef = useRef<Set<string>>(new Set());
+
   useEffect(() => {
     // Find branches that finished but don't have tips yet
     const needsTips = Object.entries(results).filter(
@@ -266,11 +269,25 @@ export default function PayoutSuite() {
       return;
     }
 
+    // Auto-trigger fetch-tips for each branch that needs it (client-side fallback).
+    // The server-side dispatch in the payroll route may have failed or been deduped
+    // when multiple branches run in parallel — this ensures every branch gets a dispatch.
+    for (const [branchId] of needsTips) {
+      if (!tipsTriggeredRef.current.has(branchId)) {
+        tipsTriggeredRef.current.add(branchId);
+        fetch("/api/phorest/fetch-tips", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ branchId, startDate, endDate }),
+        }).catch(() => {});  // Non-fatal — polling will still check cache
+      }
+    }
+
     // Already polling
     if (tipsPollingRef.current) return;
 
     let attempts = 0;
-    const maxAttempts = 20; // ~100s at 5s intervals
+    const maxAttempts = 30; // ~150s at 5s intervals (Actions take 30-90s)
 
     tipsPollingRef.current = setInterval(async () => {
       attempts++;
@@ -304,9 +321,9 @@ export default function PayoutSuite() {
                 }
               }
 
-              // Remove the tips warning
+              // Remove all tips-related warnings
               const updatedWarnings = branchResult.data.warnings.filter(
-                (w) => !w.includes("Tips are still being fetched") && !w.includes("re-run payroll")
+                (w) => !w.toLowerCase().includes("tips") && !w.includes("re-run payroll")
               );
 
               return {
