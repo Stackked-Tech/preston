@@ -25,7 +25,7 @@ No test framework is configured.
 6. **Employee Admin** (`/employee-admin`) — Staff configuration management for payroll (names, NetSuite IDs, station leases, fees) across all WHB salon branches, backed by Supabase
 7. **Employee Portal** (`/employee`) — Employee-facing portal with Supabase Auth login, placeholder onboarding, and read-only fee dashboard
 8. **Hospitality Management** (`/hospitality`) — QR-code-driven maintenance request pipeline with tenant submission, manager approval workflow, maintenance staff task board (PWA), recurring task scheduling, and admin configuration. Features SMS notifications via Twilio and Spanish translation via Claude Haiku 4.5.
-9. **Construction Scheduler** (`/scheduler`) — Construction project scheduling with interactive Gantt chart, cascading task dependencies, subcontractor notifications via Twilio SMS, magic-link sub portal, phase management, and schedule templates.
+9. **Construction Scheduler** (`/scheduler`) — Construction project scheduling with interactive Gantt chart, cascading task dependencies, subcontractor notifications via Twilio SMS + Resend email, magic-link sub portal with task acknowledgment, phase management, schedule templates with auto-assign by trade, cross-project sub workload view, and notification review flow.
 
 ## Tech Stack
 
@@ -99,8 +99,9 @@ Most database access is **client-side via Supabase SDK**. Each micro-app has its
 - `src/app/api/hospitality/auth/route.ts` — User login and password management (bcrypt)
 - `src/app/api/hospitality/recurring/route.ts` — Cron endpoint for recurring task generation
 
-**Exception — Construction Scheduler:** Uses a server-side API route for SMS notifications:
-- `src/app/api/scheduler/notify/route.ts` — Send schedule change SMS to subs via Twilio (batched per sub)
+**Exception — Construction Scheduler:** Uses server-side API routes:
+- `src/app/api/scheduler/notify/route.ts` — Send schedule change SMS (Twilio) + email (Resend) to subs, batched per sub
+- `src/app/api/scheduler/acknowledge/route.ts` — Sub portal task acknowledgment (token-verified)
 
 Payout Suite key libs:
 - `src/lib/payrollTransform.ts` — Phorest CSV → per-staff payroll data
@@ -127,7 +128,7 @@ Large feature components live in `src/components/`. Brain Dump, Time Clock, and 
 - `BroadcastHistory.tsx` — Expandable broadcast list with per-recipient delivery status
 - `MessageSearch.tsx` — Cmd+K search overlay with highlighted results
 
-Construction Scheduler uses 10 components in `src/components/scheduler/`: `SchedulerDashboard.tsx` (orchestrator), `ProjectList.tsx`, `ProjectDetail.tsx`, `GanttChart.tsx` (custom CSS grid Gantt with dependency arrows), `TaskEditor.tsx`, `PhaseManager.tsx`, `SubDirectory.tsx`, `SubPortal.tsx` (magic link view), `TemplateManager.tsx`, `NotificationLog.tsx`.
+Construction Scheduler uses 12 components in `src/components/scheduler/`: `SchedulerDashboard.tsx` (orchestrator), `ProjectList.tsx`, `ProjectDetail.tsx`, `GanttChart.tsx` (custom CSS grid Gantt with dependency arrows), `TaskEditor.tsx`, `PhaseManager.tsx`, `SubDirectory.tsx`, `SubPortal.tsx` (magic link view with task acknowledgment), `TemplateManager.tsx`, `NotificationLog.tsx`, `NotificationReview.tsx` (confirm before sending SMS/email), `SubWorkload.tsx` (cross-project sub timeline).
 
 Hospitality Management uses 18 components in `src/components/hospitality/`: `RequestForm.tsx` (public tenant form), `ManagerDashboard.tsx` (orchestrator), `RequestQueue.tsx`, `RequestReviewCard.tsx`, `ApprovalModal.tsx`, `RejectionModal.tsx`, `TaskBoard.tsx` (PWA orchestrator), `TaskList.tsx`, `TaskDetail.tsx`, `TaskStatusBar.tsx`, `TranslateButton.tsx`, `HospitalityAdmin.tsx` (admin orchestrator), `PropertyManager.tsx`, `UserManager.tsx`, `CategoryManager.tsx`, `RequesterTypeManager.tsx`, `RecurringTaskManager.tsx`, `StatsDashboard.tsx`.
 
