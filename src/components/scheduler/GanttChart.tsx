@@ -21,7 +21,7 @@ const STATUS_COLORS: Record<string, { base: string; light: string }> = {
 
 export default function GanttChart({ tasks, phases, subs, onTaskClick, onTaskDrag }: GanttChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [dragging, setDragging] = useState<{ taskId: string; startX: number; origStart: string; origEnd: string } | null>(null);
+  const [dragging, setDragging] = useState<{ taskId: string; startX: number; origStart: string; origEnd: string; currentShift: number } | null>(null);
   const [hoverTaskId, setHoverTaskId] = useState<string | null>(null);
 
   // Calculate date range
@@ -147,7 +147,7 @@ export default function GanttChart({ tasks, phases, subs, onTaskClick, onTaskDra
     (e: React.MouseEvent, task: CSTask) => {
       e.preventDefault();
       e.stopPropagation();
-      setDragging({ taskId: task.id, startX: e.clientX, origStart: task.start_date, origEnd: task.end_date });
+      setDragging({ taskId: task.id, startX: e.clientX, origStart: task.start_date, origEnd: task.end_date, currentShift: 0 });
     },
     []
   );
@@ -157,14 +157,9 @@ export default function GanttChart({ tasks, phases, subs, onTaskClick, onTaskDra
       if (!dragging) return;
       const dx = e.clientX - dragging.startX;
       const dayShift = Math.round(dx / dayWidth);
-      if (dayShift === 0) return;
-
-      const newStart = new Date(dragging.origStart + "T12:00:00");
-      newStart.setDate(newStart.getDate() + dayShift);
-      const newEnd = new Date(dragging.origEnd + "T12:00:00");
-      newEnd.setDate(newEnd.getDate() + dayShift);
-
-      // Visual preview only — actual update on mouseUp
+      if (dayShift !== dragging.currentShift) {
+        setDragging({ ...dragging, currentShift: dayShift });
+      }
     },
     [dragging, dayWidth]
   );
@@ -403,10 +398,7 @@ export default function GanttChart({ tasks, phases, subs, onTaskClick, onTaskDra
               const colors = STATUS_COLORS[task.status] || STATUS_COLORS.pending;
 
               // Calculate drag offset for visual preview
-              let dragOffset = 0;
-              if (isDraggingThis && containerRef.current) {
-                // We'll handle this via CSS transform in a future iteration
-              }
+              const dragOffset = isDraggingThis ? (dragging.currentShift * dayWidth) : 0;
 
               return (
                 <div

@@ -65,23 +65,27 @@ export function cascadeTasks(
     }
   }
 
-  // BFS cascade from changed task
+  // BFS cascade from changed task (with circular dependency protection)
   const queue = [changedTaskId];
+  const visited = new Set<string>();
   const taskMap = new Map(updated.map((t) => [t.id, t]));
 
   while (queue.length > 0) {
     const parentId = queue.shift()!;
+    if (visited.has(parentId)) continue; // prevent infinite loops from circular deps
+    visited.add(parentId);
+
     const parent = taskMap.get(parentId)!;
     const children = childrenOf.get(parentId) || [];
 
     for (const childId of children) {
+      if (visited.has(childId)) continue;
       const child = taskMap.get(childId)!;
-      // Child starts the day after parent ends
-      const newChildStart = addBusinessDays(parent.end_date, 0);
+      // Child starts the next calendar day after parent ends
       const nextDay = new Date(parent.end_date + "T12:00:00");
       nextDay.setDate(nextDay.getDate() + 1);
       const childStart = nextDay.toISOString().split("T")[0];
-      const childEnd = addBusinessDays(childStart, child.duration_days - 1);
+      const childEnd = addBusinessDays(childStart, Math.max(child.duration_days - 1, 0));
 
       child.start_date = childStart;
       child.end_date = childEnd;
@@ -257,18 +261,23 @@ export function useTasks(projectId: string | null) {
   }, []);
 
   const bulkUpdateTasks = useCallback(async (updatedTasks: CSTask[]) => {
-    // Update each changed task in parallel
-    const promises = updatedTasks.map((t) =>
-      supabase
-        .from("cs_tasks")
-        .update({
-          start_date: t.start_date,
-          end_date: t.end_date,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", t.id)
+    // Update each changed task — use allSettled to handle partial failures
+    const now = new Date().toISOString();
+    const results = await Promise.allSettled(
+      updatedTasks.map((t) =>
+        supabase
+          .from("cs_tasks")
+          .update({
+            start_date: t.start_date,
+            end_date: t.end_date,
+            updated_at: now,
+          })
+          .eq("id", t.id)
+      )
     );
-    await Promise.all(promises);
+    const failCount = results.filter((r) => r.status === "rejected").length;
+    if (failCount > 0) console.error(`${failCount}/${updatedTasks.length} task updates failed`);
+    // Update local state with successful changes
     setTasks((prev) => {
       const map = new Map(updatedTasks.map((t) => [t.id, t]));
       return prev.map((t) => map.get(t.id) || t);

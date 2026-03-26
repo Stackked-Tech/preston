@@ -38,6 +38,7 @@ export default function NotificationReview({ changes, subs, projectName, onSend,
   const [selected, setSelected] = useState<Set<string>>(new Set(subIds));
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
 
   const toggleSub = (subId: string) => {
     setSelected((prev) => {
@@ -62,6 +63,7 @@ export default function NotificationReview({ changes, subs, projectName, onSend,
       setTimeout(() => onClose(), 1500);
     } catch (err) {
       console.error("Send notifications error:", err);
+      setSendError("Failed to send some notifications. Changes were saved.");
     } finally {
       setSending(false);
     }
@@ -221,7 +223,13 @@ export default function NotificationReview({ changes, subs, projectName, onSend,
         </div>
 
         {/* Footer actions */}
-        <div className="px-6 py-4 border-t flex items-center gap-3" style={{ borderColor: "var(--border-color)", background: "var(--card-bg)" }}>
+        <div className="px-6 py-4 border-t flex flex-col gap-2" style={{ borderColor: "var(--border-color)", background: "var(--card-bg)" }}>
+          {sendError && (
+            <p className="text-xs font-sans px-3 py-2 rounded-lg m-0" style={{ background: "rgba(239, 68, 68, 0.08)", color: "#ef4444" }}>
+              {sendError}
+            </p>
+          )}
+          <div className="flex items-center gap-3">
           <button
             onClick={handleSend}
             disabled={sending || selected.size === 0}
@@ -242,6 +250,7 @@ export default function NotificationReview({ changes, subs, projectName, onSend,
           >
             Skip — Save Without Notifying
           </button>
+          </div>
         </div>
       </div>
     </div>

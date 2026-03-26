@@ -31,7 +31,22 @@ export default function TaskEditor({ task, projectId, phases, subs, tasks, onSav
     return d.toISOString().split("T")[0];
   })();
 
-  const availableDeps = tasks.filter((t) => t.id !== task?.id);
+  // Prevent circular dependencies: exclude self and any tasks that depend on this one (directly or transitively)
+  const availableDeps = (() => {
+    if (!task?.id) return tasks;
+    const descendants = new Set<string>();
+    const queue = [task.id];
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      descendants.add(current);
+      for (const t of tasks) {
+        if (t.dependency_id === current && !descendants.has(t.id)) {
+          queue.push(t.id);
+        }
+      }
+    }
+    return tasks.filter((t) => !descendants.has(t.id));
+  })();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

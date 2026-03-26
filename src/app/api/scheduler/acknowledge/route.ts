@@ -17,12 +17,17 @@ export async function POST(req: NextRequest) {
     // Verify token is valid and get sub
     const { data: tokenData, error: tokenErr } = await supabase
       .from("cs_sub_tokens")
-      .select("sub_id")
+      .select("sub_id, expires_at")
       .eq("token", subToken)
       .single();
 
     if (tokenErr || !tokenData) {
       return NextResponse.json({ error: "Invalid token" }, { status: 403 });
+    }
+
+    // Check expiry
+    if (tokenData.expires_at && new Date(tokenData.expires_at) < new Date()) {
+      return NextResponse.json({ error: "Token expired" }, { status: 403 });
     }
 
     // Verify task is assigned to this sub
