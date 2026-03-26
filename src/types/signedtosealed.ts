@@ -16,6 +16,7 @@ export interface STSEnvelope {
   message: string;
   status: EnvelopeStatus;
   created_by: string;
+  require_id_upload: boolean;
   sent_at: string | null;
   completed_at: string | null;
   voided_at: string | null;
@@ -116,6 +117,20 @@ export interface STSAuditEntry {
 }
 
 export type STSAuditInsert = Omit<STSAuditEntry, 'id' | 'created_at'>;
+
+// ─── ID Uploads ─────────────────────────────────────────
+
+export interface STSIdUpload {
+  id: string;
+  envelope_id: string;
+  recipient_id: string;
+  document_number: number;
+  file_path: string;
+  file_name: string;
+  uploaded_at: string;
+}
+
+export type STSIdUploadInsert = Omit<STSIdUpload, 'id' | 'uploaded_at'>;
 
 // ─── Templates ───────────────────────────────────────────
 

@@ -42,6 +42,7 @@ export default function EnvelopeWizard({ envelopeId, initialStep, onComplete, on
   const [uploading, setUploading] = useState(false);
   const [sending, setSending] = useState(false);
   const [showSaveAsTemplate, setShowSaveAsTemplate] = useState(false);
+  const [requireIdUpload, setRequireIdUpload] = useState(false);
 
   // Field placement state
   const [currentPage, setCurrentPage] = useState(1);
@@ -56,6 +57,7 @@ export default function EnvelopeWizard({ envelopeId, initialStep, onComplete, on
       if (!initialSynced.current) {
         setTitle(detail.title);
         setMessage(detail.message);
+        setRequireIdUpload(detail.require_id_upload ?? false);
         initialSynced.current = true;
       }
       setDocuments(detail.documents);
@@ -78,8 +80,8 @@ export default function EnvelopeWizard({ envelopeId, initialStep, onComplete, on
   // Auto-save title/message changes
   const saveMetadata = useCallback(async () => {
     if (!activeEnvelopeId) return;
-    await updateEnvelope(activeEnvelopeId, { title: title || "Untitled Envelope", message });
-  }, [activeEnvelopeId, title, message, updateEnvelope]);
+    await updateEnvelope(activeEnvelopeId, { title: title || "Untitled Envelope", message, require_id_upload: requireIdUpload });
+  }, [activeEnvelopeId, title, message, requireIdUpload, updateEnvelope]);
 
   // Handle file upload
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -486,6 +488,34 @@ export default function EnvelopeWizard({ envelopeId, initialStep, onComplete, on
                   <p className="text-sm" style={{ color: "var(--text-primary)" }}>
                     {fields.length} field{fields.length !== 1 ? "s" : ""} placed across {documents.length} document{documents.length !== 1 ? "s" : ""}
                   </p>
+                </div>
+
+                {/* Require ID Upload */}
+                <div className="p-4 rounded-lg border" style={{ background: "var(--card-bg)", borderColor: "var(--border-light)" }}>
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={requireIdUpload}
+                      onChange={(e) => setRequireIdUpload(e.target.checked)}
+                      className="w-4 h-4 rounded accent-[var(--gold)]"
+                    />
+                    <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                      Require document upload
+                    </span>
+                  </label>
+                  {requireIdUpload && (
+                    <div className="mt-3 ml-7 space-y-2">
+                      <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                        Signers will be required to upload the following documents before signing:
+                      </p>
+                      <div className="text-xs px-3 py-2 rounded" style={{ background: "var(--bg-primary)", color: "var(--text-primary)" }}>
+                        ID Document 1 (e.g., Driver&apos;s License, Passport)
+                      </div>
+                      <div className="text-xs px-3 py-2 rounded" style={{ background: "var(--bg-primary)", color: "var(--text-primary)" }}>
+                        ID Document 2 (e.g., Social Security Card, Passport)
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <button

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { useDocumentUpload, useAuditLog } from "@/lib/signedToSealedHooks";
 import type { STSEnvelopeDetail, STSRecipient, STSField, SignatureMethod } from "@/types/signedtosealed";
@@ -32,6 +32,60 @@ export default function SigningView({ envelope, recipient, isPublic, onComplete 
   });
   const [submitting, setSubmitting] = useState(false);
   const [completed, setCompleted] = useState(false);
+
+  // ID upload state
+  const requireIdUpload = envelope.require_id_upload ?? false;
+  const [idFile1, setIdFile1] = useState<File | null>(null);
+  const [idFile2, setIdFile2] = useState<File | null>(null);
+  const [idUploaded1, setIdUploaded1] = useState(false);
+  const [idUploaded2, setIdUploaded2] = useState(false);
+  const [idUploading, setIdUploading] = useState(false);
+  const idInput1Ref = useRef<HTMLInputElement>(null);
+  const idInput2Ref = useRef<HTMLInputElement>(null);
+
+  const ACCEPTED_ID_TYPES = ".jpg,.jpeg,.png,.heic,.pdf";
+
+  const handleIdFileSelect = async (file: File, docNumber: 1 | 2) => {
+    const ext = file.name.split(".").pop()?.toLowerCase() || "";
+    if (!["jpg", "jpeg", "png", "heic", "pdf"].includes(ext)) {
+      alert("Please upload an image (JPG, PNG, HEIC) or PDF file.");
+      return;
+    }
+    if (docNumber === 1) setIdFile1(file);
+    else setIdFile2(file);
+
+    setIdUploading(true);
+    try {
+      const filePath = `${envelope.id}/${recipient.id}/id-${docNumber}.${ext}`;
+      const { error: uploadErr } = await supabase.storage
+        .from("sts-id-uploads")
+        .upload(filePath, file, { upsert: true });
+      if (uploadErr) throw uploadErr;
+
+      // Save record to sts_id_uploads table
+      await supabase.from("sts_id_uploads").upsert(
+        {
+          envelope_id: envelope.id,
+          recipient_id: recipient.id,
+          document_number: docNumber,
+          file_path: filePath,
+          file_name: file.name,
+        },
+        { onConflict: "envelope_id,recipient_id,document_number" }
+      );
+
+      if (docNumber === 1) setIdUploaded1(true);
+      else setIdUploaded2(true);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to upload ID document");
+      if (docNumber === 1) { setIdFile1(null); setIdUploaded1(false); }
+      else { setIdFile2(null); setIdUploaded2(false); }
+    } finally {
+      setIdUploading(false);
+    }
+  };
+
+  const idUploadsComplete = !requireIdUpload || (idUploaded1 && idUploaded2);
 
   // Fields for this recipient
   const myFields = useMemo(
@@ -272,10 +326,85 @@ export default function SigningView({ envelope, recipient, isPublic, onComplete 
         )}
       </div>
 
+      {/* ID Upload Section */}
+      {requireIdUpload && (
+        <div className="px-6 py-4 border-t space-y-3" style={{ borderColor: "var(--border-color)", background: "var(--bg-secondary)" }}>
+          <p className="text-xs font-medium tracking-[1px] uppercase" style={{ color: "var(--text-muted)" }}>
+            Required ID Documents
+          </p>
+
+          {/* ID Document 1 */}
+          <div className="flex items-center gap-3">
+            <input
+              ref={idInput1Ref}
+              type="file"
+              accept={ACCEPTED_ID_TYPES}
+              className="hidden"
+              onChange={(e) => { if (e.target.files?.[0]) handleIdFileSelect(e.target.files[0], 1); }}
+            />
+            <button
+              onClick={() => idInput1Ref.current?.click()}
+              disabled={idUploading}
+              className="flex-1 text-left px-4 py-3 rounded-lg border-2 border-dashed transition-all hover:opacity-80"
+              style={{
+                borderColor: idUploaded1 ? "#10b981" : "var(--border-color)",
+                background: idUploaded1 ? "#10b98110" : "var(--bg-primary)",
+              }}
+            >
+              <p className="text-xs font-medium" style={{ color: "var(--text-primary)" }}>
+                Upload ID Document 1 (e.g., Driver&apos;s License, Passport)
+              </p>
+              {idFile1 ? (
+                <p className="text-xs mt-1" style={{ color: idUploaded1 ? "#10b981" : "var(--text-muted)" }}>
+                  {idUploaded1 ? "✓" : "⏳"} {idFile1.name}
+                </p>
+              ) : (
+                <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
+                  Click to select file (JPG, PNG, HEIC, or PDF)
+                </p>
+              )}
+            </button>
+          </div>
+
+          {/* ID Document 2 */}
+          <div className="flex items-center gap-3">
+            <input
+              ref={idInput2Ref}
+              type="file"
+              accept={ACCEPTED_ID_TYPES}
+              className="hidden"
+              onChange={(e) => { if (e.target.files?.[0]) handleIdFileSelect(e.target.files[0], 2); }}
+            />
+            <button
+              onClick={() => idInput2Ref.current?.click()}
+              disabled={idUploading}
+              className="flex-1 text-left px-4 py-3 rounded-lg border-2 border-dashed transition-all hover:opacity-80"
+              style={{
+                borderColor: idUploaded2 ? "#10b981" : "var(--border-color)",
+                background: idUploaded2 ? "#10b98110" : "var(--bg-primary)",
+              }}
+            >
+              <p className="text-xs font-medium" style={{ color: "var(--text-primary)" }}>
+                Upload ID Document 2 (e.g., Social Security Card, Passport)
+              </p>
+              {idFile2 ? (
+                <p className="text-xs mt-1" style={{ color: idUploaded2 ? "#10b981" : "var(--text-muted)" }}>
+                  {idUploaded2 ? "✓" : "⏳"} {idFile2.name}
+                </p>
+              ) : (
+                <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
+                  Click to select file (JPG, PNG, HEIC, or PDF)
+                </p>
+              )}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Submit Bar */}
       <div
         className="flex items-center justify-between px-6 py-4 border-t"
-        style={{ borderColor: progress === 100 ? "#10b981" : "var(--border-color)", background: "var(--bg-secondary)" }}
+        style={{ borderColor: progress === 100 && idUploadsComplete ? "#10b981" : "var(--border-color)", background: "var(--bg-secondary)" }}
       >
         <div>
           <p className="text-xs" style={{ color: "var(--text-muted)" }}>
@@ -289,16 +418,16 @@ export default function SigningView({ envelope, recipient, isPublic, onComplete 
         </div>
         <button
           onClick={handleSubmit}
-          disabled={submitting || progress < 100}
+          disabled={submitting || progress < 100 || !idUploadsComplete}
           className="px-8 py-3 rounded-lg text-sm font-semibold transition-all hover:opacity-90 flex-shrink-0"
           style={{
-            background: progress === 100 ? "#10b981" : "var(--border-color)",
-            color: progress === 100 ? "#fff" : "var(--text-muted)",
+            background: progress === 100 && idUploadsComplete ? "#10b981" : "var(--border-color)",
+            color: progress === 100 && idUploadsComplete ? "#fff" : "var(--text-muted)",
             opacity: submitting ? 0.5 : 1,
-            boxShadow: progress === 100 ? "0 0 20px #10b98140" : "none",
+            boxShadow: progress === 100 && idUploadsComplete ? "0 0 20px #10b98140" : "none",
           }}
         >
-          {submitting ? "Submitting..." : progress === 100 ? "Finish Signing" : "Complete All Fields to Sign"}
+          {submitting ? "Submitting..." : progress === 100 && idUploadsComplete ? "Finish Signing" : progress < 100 ? "Complete All Fields to Sign" : "Upload Required ID Documents"}
         </button>
       </div>
 
