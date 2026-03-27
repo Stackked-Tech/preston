@@ -45,6 +45,7 @@ export default function EnvelopeDetail({ envelopeId, onBack, onEdit }: EnvelopeD
   const [emailPreviewHtml, setEmailPreviewHtml] = useState<string | null>(null);
   const [emailPreviewRecipient, setEmailPreviewRecipient] = useState<string | null>(null);
   const [sendingEmailTo, setSendingEmailTo] = useState<string | null>(null);
+  const [sendingAll, setSendingAll] = useState(false);
   const [editingEmailId, setEditingEmailId] = useState<string | null>(null);
   const [editEmailValue, setEditEmailValue] = useState("");
 
@@ -202,6 +203,52 @@ export default function EnvelopeDetail({ envelopeId, onBack, onEdit }: EnvelopeD
       alert("Failed to send email");
     } finally {
       setSendingEmailTo(null);
+    }
+  };
+
+  const sendAllEmails = async () => {
+    if (!detail) return;
+    const signers = detail.recipients.filter(
+      (r) => r.role === "signer" && r.status !== "signed" && r.email && isValidEmail(r.email)
+    );
+    if (signers.length === 0) {
+      alert("No eligible recipients with valid emails to send to.");
+      return;
+    }
+    if (!confirm(`Send signing invitation emails to ${signers.length} recipient${signers.length > 1 ? "s" : ""}?`)) return;
+    setSendingAll(true);
+    const results: { name: string; success: boolean }[] = [];
+    for (const r of signers) {
+      const recipientFields = detail.fields.filter((f) => f.recipient_id === r.id);
+      setSendingEmailTo(r.id);
+      try {
+        const res = await fetch("/api/signed-to-sealed/send-invite", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            recipientName: r.name,
+            recipientEmail: r.email,
+            senderName: detail.created_by || "WHB Companies",
+            envelopeTitle: detail.title || "Untitled Envelope",
+            envelopeMessage: detail.message || "",
+            signingLink: getSigningLink(r),
+            documentCount: detail.documents.length,
+            fieldCount: recipientFields.length,
+          }),
+        });
+        results.push({ name: r.name, success: res.ok });
+      } catch {
+        results.push({ name: r.name, success: false });
+      }
+    }
+    setSendingEmailTo(null);
+    setSendingAll(false);
+    const sent = results.filter((r) => r.success).length;
+    const failed = results.filter((r) => !r.success);
+    if (failed.length === 0) {
+      alert(`All ${sent} email${sent > 1 ? "s" : ""} sent successfully.`);
+    } else {
+      alert(`${sent} sent, ${failed.length} failed: ${failed.map((f) => f.name).join(", ")}`);
     }
   };
 
@@ -388,12 +435,24 @@ export default function EnvelopeDetail({ envelopeId, onBack, onEdit }: EnvelopeD
           className="mb-8 p-5 rounded-lg border"
           style={{ background: "var(--card-bg)", borderColor: "var(--gold)" }}
         >
-          <div className="flex items-center gap-2 mb-3">
-            <span className="text-lg">🔗</span>
-            <h3 className="text-sm font-medium" style={{ color: "var(--gold)" }}>Signing Links</h3>
-            <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>
-              Share these links with recipients to sign
-            </span>
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <span className="text-lg">🔗</span>
+              <h3 className="text-sm font-medium" style={{ color: "var(--gold)" }}>Signing Links</h3>
+              <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>
+                Share these links with recipients to sign
+              </span>
+            </div>
+            {detail.recipients.filter((r) => r.role === "signer" && r.status !== "signed").length > 1 && (
+              <button
+                onClick={sendAllEmails}
+                disabled={sendingAll}
+                className="text-xs px-4 py-1.5 rounded-md font-medium transition-all hover:opacity-90"
+                style={{ background: "#10b981", color: "#fff", opacity: sendingAll ? 0.5 : 1 }}
+              >
+                {sendingAll ? "Sending All..." : "Send All Emails"}
+              </button>
+            )}
           </div>
           <div className="space-y-2">
             {detail.recipients.filter((r) => r.role === "signer").map((r) => (
